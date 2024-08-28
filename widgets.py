@@ -20,6 +20,7 @@ from bokeh.models import (
     DataRange1d,
     DatetimeTickFormatter,
     HoverTool,
+    Legend,
     LinearAxis,
 )
 from bokeh.plotting import figure, output_file, save
@@ -510,6 +511,15 @@ class DataWidget:
             "#17becf",
         ]
 
+        # グラフ作成ループの前に最大凡例長を計算
+        max_legend_length = 0
+        for _, row in param_setting_df.iterrows():
+            legend_name = row["凡例表示名"]
+            max_legend_length = max(max_legend_length, len(legend_name))
+
+        # 文字数に基づいて幅を計算（1文字あたり約6ピクセルと仮定）
+        label_width = max_legend_length * 6
+
         # Graph_Noごとにグラフを作成
         graphs = []
         for graph_no in param_setting_df["Graph_No"].unique():
@@ -522,13 +532,6 @@ class DataWidget:
                 x_range=x_range,  # 共通のX軸範囲を使用
                 tools=["pan", "wheel_zoom", "box_zoom", "reset", "save"],
             )
-
-            p.xaxis.formatter = DatetimeTickFormatter(
-                hours="%Y-%m-%d %H:%M",
-                days="%Y-%m-%d %H:%M",
-            )
-            p.xaxis.major_label_orientation = 0.7
-            p.min_border_bottom = 100
 
             params_for_graph = param_setting_df[param_setting_df["Graph_No"] == graph_no]
 
@@ -603,7 +606,18 @@ class DataWidget:
             hover = HoverTool(tooltips=tooltips, formatters={"@x": "datetime"}, mode="mouse")
             p.add_tools(hover)
 
-            p.legend.click_policy = "hide"
+            # 凡例の設定
+            if p.legend and p.legend.items:
+                new_legend = Legend(items=p.legend.items, label_width=label_width)
+                p.legend.visible = False
+                p.add_layout(new_legend, "right")
+
+            p.xaxis.formatter = DatetimeTickFormatter(
+                hours="%Y-%m-%d %H:%M",
+                days="%Y-%m-%d %H:%M",
+            )
+            p.xaxis.major_label_orientation = 0.7
+            p.min_border_bottom = 100
 
             graphs.append(p)
 
