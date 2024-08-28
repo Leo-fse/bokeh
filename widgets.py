@@ -4,7 +4,6 @@ import tempfile
 import traceback
 import webbrowser
 from datetime import datetime
-from pprint import pformat
 from typing import Any, Dict, List, Optional, Tuple
 
 import ipywidgets as widgets
@@ -35,8 +34,20 @@ class Constants:
         "layout": widgets.Layout(width="300px", height="32px"),
         "style": {"description_width": "100px"},
     }
-    REQUIRED_SHEETS: List[str] = ["tag", "period", "param"]
+    REQUIRED_SHEETS: List[str] = ["tag", "period", "param", "axis"]
     BUTTON_LAYOUT = widgets.Layout(width="180px", height="32px")
+    COLOR_PALETTE: List[str] = [
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
+    ]
 
 
 # ダミーデータ生成用のAPI関数
@@ -72,7 +83,7 @@ class DataWidget:
         self.layout = self._create_layout()
         self._create_event_handlers()
         self._set_initial_state()
-        self.fetched_data = None
+        self.fetched_data: Optional[pd.DataFrame] = None
 
     def _create_widgets(self) -> Dict[str, widgets.Widget]:
         """すべてのウィジェットを作成し、辞書として返す"""
@@ -483,154 +494,158 @@ class DataWidget:
 
         self._log(f"ステータス: {self.widgets['graph_status'].value}")
 
-    def _create_graph(self):
+    def _create_graph(self) -> None:
         """Bokehを使用してGraph_Noごとにグラフを作成し、HTMLファイルとして保存する"""
         self._log("グラフ作成を開始します")
         setting_data = self._get_setting_data()
         param_setting_df = setting_data["param_setting_df"]
         tag_dict = setting_data["tag_dict"]
         machine = setting_data["machine"]
-
-        # axis_setting_dfを取得
         axis_setting_df = setting_data["axis_setting_df"]
 
-        # 共通のX軸範囲を設定
         x_range = DataRange1d()
-
-        # 自動色設定用のカラーパレット
-        color_palette = [
-            "#1f77b4",
-            "#ff7f0e",
-            "#2ca02c",
-            "#d62728",
-            "#9467bd",
-            "#8c564b",
-            "#e377c2",
-            "#7f7f7f",
-            "#bcbd22",
-            "#17becf",
-        ]
-
-        # グラフ作成ループの前に最大凡例長を計算
-        max_legend_length = 0
-        for _, row in param_setting_df.iterrows():
-            legend_name = row["凡例表示名"]
-            max_legend_length = max(max_legend_length, len(legend_name))
-
-        # 文字数に基づいて幅を計算（1文字あたり約6ピクセルと仮定）
+        max_legend_length = self._calculate_max_legend_length(param_setting_df)
         label_width = max_legend_length * 6
 
-        # Graph_Noごとにグラフを作成
         graphs = []
         for graph_no in param_setting_df["Graph_No"].unique():
-            p = figure(
-                title=f"データグラフ (Graph_No: {graph_no})",
-                x_axis_label="時間",
-                x_axis_type="datetime",
-                width=800,
-                height=400,
-                x_range=x_range,  # 共通のX軸範囲を使用
-                tools=["pan", "wheel_zoom", "box_zoom", "reset", "save"],
-            )
-
+            p = self._create_figure(graph_no, x_range)
             params_for_graph = param_setting_df[param_setting_df["Graph_No"] == graph_no]
-
-            # Y軸の設定
-            y_ranges = {}
-            for i, axis_no in enumerate(params_for_graph["Axis_No"].unique()):
-                axis_settings = axis_setting_df[
-                    (axis_setting_df["Graph_No"] == graph_no)
-                    & (axis_setting_df["Axis_No"] == axis_no)
-                ].iloc[0]
-
-                # Y軸のレンジ設定
-                y_range = DataRange1d()
-                if pd.notna(axis_settings["レンジ下限"]) and pd.notna(axis_settings["レンジ上限"]):
-                    y_range.start = axis_settings["レンジ下限"]
-                    y_range.end = axis_settings["レンジ上限"]
-
-                y_ranges[axis_no] = y_range
-                axis_name = f"Axis_{axis_no}"
-                if i == 0:
-                    p.yaxis.axis_label = axis_settings["軸ラベル"]
-                    p.y_range = y_range
-                else:
-                    p.extra_y_ranges[axis_name] = y_range
-                    new_axis = LinearAxis(
-                        y_range_name=axis_name, axis_label=axis_settings["軸ラベル"]
-                    )
-                    p.add_layout(new_axis, "left")
-
-            # 全てのパラメータのデータを1つのColumnDataSourceにまとめる
-            source_data = {"x": self.fetched_data["time"]}
-            for _, row in params_for_graph.iterrows():
-                param = row["項目名"]
-                col_name = tag_dict[param][machine]
-                if col_name in self.fetched_data.columns:
-                    source_data[param] = self.fetched_data[col_name]
-
-            source = ColumnDataSource(data=source_data)
-
-            # 各パラメータの線をプロット
-            for i, (_, row) in enumerate(params_for_graph.iterrows()):
-                param = row["項目名"]
-                color = row["色"] if pd.notna(row["色"]) else color_palette[i % len(color_palette)]
-                legend_name = row["凡例表示名"]
-                line_style = row["線種"] if pd.notna(row["線種"]) else "solid"
-                line_width = row["線幅"] if pd.notna(row["線幅"]) else 1
-                axis_no = row["Axis_No"]
-
-                y_range_name = (
-                    f"Axis_{axis_no}"
-                    if axis_no != params_for_graph["Axis_No"].unique()[0]
-                    else "default"
-                )
-                p.line(
-                    "x",
-                    param,
-                    source=source,
-                    legend_label=legend_name,
-                    color=color,
-                    line_dash=line_style,
-                    line_width=line_width,
-                    y_range_name=y_range_name,
-                )
-
-            # HoverToolの設定
-            tooltips = [
-                (row["凡例表示名"], f"@{{{row['項目名']}}}{{0.00}}")
-                for _, row in params_for_graph.iterrows()
-            ]
-            tooltips.insert(0, ("日時", "@x{%Y-%m-%d %H:%M:%S}"))
-
-            hover = HoverTool(tooltips=tooltips, formatters={"@x": "datetime"}, mode="mouse")
-            p.add_tools(hover)
-
-            # 凡例の設定
-            if p.legend and p.legend.items:
-                new_legend = Legend(items=p.legend.items, label_width=label_width)
-                p.legend.visible = False
-                p.add_layout(new_legend, "right")
-
-            p.xaxis.formatter = DatetimeTickFormatter(
-                hours="%Y-%m-%d %H:%M",
-                days="%Y-%m-%d %H:%M",
-            )
-            p.xaxis.major_label_orientation = 0.7
-            p.min_border_bottom = 100
-
+            y_ranges = self._setup_y_axes(p, params_for_graph, axis_setting_df, graph_no)
+            source = self._create_data_source(params_for_graph, tag_dict, machine)
+            self._plot_lines(p, params_for_graph, source, y_ranges)
+            self._setup_hover_tool(p, params_for_graph)
+            self._setup_legend(p, label_width)
+            self._format_axes(p)
             graphs.append(p)
 
-        # 全てのグラフを縦に並べる
-        layout = column(graphs)
+        self._save_and_open_graphs(graphs)
 
-        # HTMLファイルとして保存
+    def _calculate_max_legend_length(self, param_setting_df: pd.DataFrame) -> int:
+        return max(len(row["凡例表示名"]) for _, row in param_setting_df.iterrows())
+
+    def _create_figure(self, graph_no: int, x_range: DataRange1d) -> figure:
+        return figure(
+            title=f"データグラフ (Graph_No: {graph_no})",
+            x_axis_label="時間",
+            x_axis_type="datetime",
+            width=800,
+            height=400,
+            x_range=x_range,
+            tools=["pan", "wheel_zoom", "box_zoom", "reset", "save"],
+        )
+
+    def _setup_y_axes(
+        self,
+        p: figure,
+        params_for_graph: pd.DataFrame,
+        axis_setting_df: pd.DataFrame,
+        graph_no: int,
+    ) -> Dict[int, DataRange1d]:
+        y_ranges = {}
+        for i, axis_no in enumerate(params_for_graph["Axis_No"].unique()):
+            axis_settings = axis_setting_df[
+                (axis_setting_df["Graph_No"] == graph_no) & (axis_setting_df["Axis_No"] == axis_no)
+            ].iloc[0]
+            y_range = self._create_y_range(axis_settings)
+            y_ranges[axis_no] = y_range
+            self._add_y_axis(p, y_range, axis_settings, i == 0)
+        return y_ranges
+
+    def _create_y_range(self, axis_settings: pd.Series) -> DataRange1d:
+        y_range = DataRange1d()
+        if pd.notna(axis_settings["レンジ下限"]) and pd.notna(axis_settings["レンジ上限"]):
+            y_range.start = axis_settings["レンジ下限"]
+            y_range.end = axis_settings["レンジ上限"]
+        return y_range
+
+    def _add_y_axis(
+        self, p: figure, y_range: DataRange1d, axis_settings: pd.Series, is_primary: bool
+    ) -> None:
+        if is_primary:
+            p.yaxis.axis_label = axis_settings["軸ラベル"]
+            p.y_range = y_range
+        else:
+            axis_name = f"Axis_{axis_settings['Axis_No']}"
+            p.extra_y_ranges[axis_name] = y_range
+            new_axis = LinearAxis(y_range_name=axis_name, axis_label=axis_settings["軸ラベル"])
+            p.add_layout(new_axis, "left")
+
+    def _create_data_source(
+        self, params_for_graph: pd.DataFrame, tag_dict: Dict[str, Any], machine: str
+    ) -> ColumnDataSource:
+        source_data = {"x": self.fetched_data["time"]}
+        for _, row in params_for_graph.iterrows():
+            param = row["項目名"]
+            col_name = tag_dict[param][machine]
+            if col_name in self.fetched_data.columns:
+                source_data[param] = self.fetched_data[col_name]
+        return ColumnDataSource(data=source_data)
+
+    def _plot_lines(
+        self,
+        p: figure,
+        params_for_graph: pd.DataFrame,
+        source: ColumnDataSource,
+        y_ranges: Dict[int, DataRange1d],
+    ) -> None:
+        for i, (_, row) in enumerate(params_for_graph.iterrows()):
+            param = row["項目名"]
+            color = (
+                row["色"]
+                if pd.notna(row["色"])
+                else Constants.COLOR_PALETTE[i % len(Constants.COLOR_PALETTE)]
+            )
+            legend_name = row["凡例表示名"]
+            line_style = row["線種"] if pd.notna(row["線種"]) else "solid"
+            line_width = row["線幅"] if pd.notna(row["線幅"]) else 1
+            axis_no = row["Axis_No"]
+
+            y_range_name = (
+                f"Axis_{axis_no}"
+                if axis_no != params_for_graph["Axis_No"].unique()[0]
+                else "default"
+            )
+            p.line(
+                "x",
+                param,
+                source=source,
+                legend_label=legend_name,
+                color=color,
+                line_dash=line_style,
+                line_width=line_width,
+                y_range_name=y_range_name,
+            )
+
+    def _setup_hover_tool(self, p: figure, params_for_graph: pd.DataFrame) -> None:
+        tooltips = [
+            (row["凡例表示名"], f"@{{{row['項目名']}}}{{0.00}}")
+            for _, row in params_for_graph.iterrows()
+        ]
+        tooltips.insert(0, ("日時", "@x{%Y-%m-%d %H:%M:%S}"))
+        hover = HoverTool(tooltips=tooltips, formatters={"@x": "datetime"}, mode="mouse")
+        p.add_tools(hover)
+
+    def _setup_legend(self, p: figure, label_width: int) -> None:
+        if p.legend and p.legend.items:
+            new_legend = Legend(items=p.legend.items, label_width=label_width)
+            p.legend.visible = False
+            p.add_layout(new_legend, "right")
+
+    def _format_axes(self, p: figure) -> None:
+        p.xaxis.formatter = DatetimeTickFormatter(
+            hours="%Y-%m-%d %H:%M",
+            days="%Y-%m-%d %H:%M",
+        )
+        p.xaxis.major_label_orientation = 0.7
+        p.min_border_bottom = 100
+
+    def _save_and_open_graphs(self, graphs: List[figure]) -> None:
+        layout = column(graphs)
         output_file_path = os.path.join(self.output_dir, "graphs.html")
-        output_file(output_file_path, title="データグラフ")  # タイトルを設定
+        output_file(output_file_path, title="データグラフ")
         save(layout, filename=output_file_path, title="データグラフ", resources=CDN)
         self._log(f"グラフを保存しました: {output_file_path}")
-
-        # ブラウザでHTMLファイルを開く
         webbrowser.open("file://" + os.path.realpath(output_file_path))
 
 
