@@ -177,7 +177,7 @@ class GraphCreator:
             title=f"データグラフ (Graph_No: {graph_no})",
             x_axis_label="時間",
             x_axis_type="datetime",
-            width=800,
+            width=1200,  # 横幅を800から1200に変更
             height=400,
             x_range=x_range,
             tools=["pan", "wheel_zoom", "box_zoom", "reset", "save"],
@@ -293,7 +293,7 @@ class GraphCreator:
         p.min_border_bottom = 100
 
     def _save_and_open_graphs(self, graphs: List[figure]) -> None:
-        layout = column(graphs)
+        layout = column(graphs, sizing_mode="stretch_width")  # sizing_modeを追加
         output_file_path = os.path.join("output", "graphs.html")
         output_file(output_file_path, title="データグラフ")
         save(layout, filename=output_file_path, title="データグラフ", resources=CDN)
