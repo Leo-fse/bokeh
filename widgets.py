@@ -9,10 +9,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import ipywidgets as widgets
 import numpy as np
 import pandas as pd
-from IPython.display import HTML, display
+from IPython.display import HTML, Javascript, display
 
 import pi_data_fetch as pi
 from bokeh.embed import components, file_html
+from bokeh.io import output_notebook, show
 from bokeh.layouts import column
 from bokeh.models import (
     ColumnDataSource,
@@ -206,6 +207,7 @@ class DataFetcher:
 class GraphCreator:
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
+        output_notebook()  # Bokehグラフをノートブック内に表示するための設定
 
     def create_graph(self, data):
         setting_data = self.settings_manager.get_setting_data()
@@ -214,13 +216,12 @@ class GraphCreator:
         machine = setting_data["machine"]
         axis_setting_df = setting_data["axis_setting_df"]
 
-        x_range = DataRange1d()
         max_legend_length = self._calculate_max_legend_length(param_setting_df)
         label_width = max_legend_length * 6
 
         graphs = []
         for graph_no in param_setting_df["Graph_No"].unique():
-            p = self._create_figure(graph_no, x_range)
+            p = self._create_figure(graph_no)
             params_for_graph = param_setting_df[param_setting_df["Graph_No"] == graph_no]
             y_ranges = self._setup_y_axes(p, params_for_graph, axis_setting_df, graph_no)
             source = self._create_data_source(params_for_graph, tag_dict, machine, data)
@@ -230,20 +231,19 @@ class GraphCreator:
             self._format_axes(p)
             graphs.append(p)
 
-        self._save_and_open_graphs(graphs)
+        return column(graphs)
 
     def _calculate_max_legend_length(self, param_setting_df: pd.DataFrame) -> int:
         return max(len(row["凡例表示名"]) for _, row in param_setting_df.iterrows())
 
-    def _create_figure(self, graph_no: int, x_range: DataRange1d) -> figure:
+    def _create_figure(self, graph_no: int) -> figure:
         return figure(
             title=f"データグラフ (Graph_No: {graph_no})",
             x_axis_label="時間",
             x_axis_type="datetime",
-            width=1200,  # 横幅を800から1200に変更
+            width=1200,
             height=400,
-            x_range=x_range,
-            tools=["pan", "wheel_zoom", "box_zoom", "reset", "save"],
+            tools="pan,wheel_zoom,box_zoom,reset,save",
         )
 
     def _setup_y_axes(
@@ -339,7 +339,7 @@ class GraphCreator:
         ]
         tooltips.insert(0, ("日時", "@x{%Y-%m-%d %H:%M:%S}"))
         hover = HoverTool(tooltips=tooltips, formatters={"@x": "datetime"}, mode="mouse")
-        p.add_tools(hover)
+        p.add_tools(hover)  # 新しいHoverToolインスタンスを追加
 
     def _setup_legend(self, p: figure, label_width: int) -> None:
         if p.legend and p.legend.items:
@@ -354,13 +354,6 @@ class GraphCreator:
         )
         p.xaxis.major_label_orientation = 0.7
         p.min_border_bottom = 100
-
-    def _save_and_open_graphs(self, graphs: List[figure]) -> None:
-        layout = column(graphs, sizing_mode="stretch_width")  # sizing_modeを追加
-        output_file_path = os.path.join("output", "graphs.html")
-        output_file(output_file_path, title="データグラフ")
-        save(layout, filename=output_file_path, title="データグラフ", resources=CDN)
-        webbrowser.open("file://" + os.path.realpath(output_file_path))
 
 
 class WidgetManager:
@@ -425,7 +418,22 @@ class DataAnalysisWorkbench:
         self.widget_manager = WidgetManager()
 
         self.output = widgets.Output(layout={"border": "1px solid black"})
-        self.log_output = widgets.Output()
+        self.log_output = widgets.Output(
+            layout={
+                "overflow": "auto",
+                "width": "100%",
+                "white-space": "pre-wrap",
+                "word-wrap": "break-word",
+            }
+        )
+        self.error_log_output = widgets.Output(
+            layout={
+                "overflow": "auto",
+                "width": "100%",
+                "white-space": "pre-wrap",
+                "word-wrap": "break-word",
+            }
+        )
         self.log_accordion = self._create_log_accordion()
         self.layout = self._create_layout()
         self._create_event_handlers()
@@ -558,6 +566,16 @@ class DataAnalysisWorkbench:
             line-height: 32px !important;
             padding: 0 4px !important;
         }
+        .jp-OutputArea-output {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .widget-button {
+            width: 180px !important;
+            height: 32px !important;
+            line-height: 32px !important;
+            padding: 0 4px !important;
+        }
         </style>
         """
         display(widgets.HTML(custom_css))
@@ -595,6 +613,7 @@ class DataAnalysisWorkbench:
         except Exception as e:
             self.widget_manager.widgets["data_fetch_status"].value = f"データ取得エラー: {str(e)}"
             self._log(f"データ取得中にエラーが発生しました: {str(e)}")
+            self._error_log(traceback.format_exc())
 
         self._log(f"ステータス: {self.widget_manager.widgets['data_fetch_status'].value}")
 
@@ -648,6 +667,14 @@ class DataAnalysisWorkbench:
     def _log(self, message: str) -> None:
         with self.log_output:
             print(message)
+        if self.log_output.outputs:
+            self.log_output.outputs[-1]["output_type"] = "stream"
+
+    def _error_log(self, message: str) -> None:
+        with self.error_log_output:
+            print(message)
+        if self.error_log_output.outputs:
+            self.error_log_output.outputs[-1]["output_type"] = "stream"
 
     def on_graph_create_click(self, b):
         self._log("グラフ作成ボタンがクリックされました")
@@ -659,22 +686,57 @@ class DataAnalysisWorkbench:
             return
 
         try:
-            self.graph_creator.create_graph(self.fetched_data)
+            graph_layout = self.graph_creator.create_graph(self.fetched_data)
             self.widget_manager.widgets[
                 "graph_status"
-            ].value = "グラフ作成完了。ブラウザで開きました。"
+            ].value = "グラフ作成完了。output/graphs.htmlに保存され、以下に表示されています。"
+
+            # グラフをノートブック上に表示
+            with self.output:
+                self.output.clear_output(wait=True)  # 既存の出力をクリア
+                show(graph_layout)
         except Exception as e:
             self._log(f"グラフ作成中にエラーが発生しました: {str(e)}")
             self.widget_manager.widgets["graph_status"].value = f"グラフ作成エラー: {str(e)}"
-            self._log(traceback.format_exc())
+            self._error_log(traceback.format_exc())
 
         self._log(f"ステータス: {self.widget_manager.widgets['graph_status'].value}")
 
     def _create_log_accordion(self) -> widgets.Accordion:
-        log_accordion = widgets.Accordion(children=[self.log_output])
+        log_container = widgets.VBox(
+            [
+                widgets.Label("通常ログ:"),
+                self.log_output,
+                widgets.Label("エラーログ:"),
+                self.error_log_output,
+            ]
+        )
+        log_accordion = widgets.Accordion(children=[log_container])
         log_accordion.set_title(0, "ログ")
         log_accordion.selected_index = None
+        log_accordion.layout.width = "100%"
         return log_accordion
+
+    def copy_log_to_clipboard(self, b):
+        normal_log = "\n".join(
+            [output["text"] for output in self.log_output.outputs if "text" in output]
+        )
+        error_log = "\n".join(
+            [output["text"] for output in self.error_log_output.outputs if "text" in output]
+        )
+
+        full_log = f"通常ログ:\n{normal_log}\n\nエラーログ:\n{error_log}"
+
+        js_code = f"""
+        var dummy = document.createElement("textarea");
+        document.body.appendChild(dummy);
+        dummy.value = {repr(full_log)};
+        dummy.select();
+        document.execCommand("copy");
+        document.body.removeChild(dummy);
+        """
+        display(Javascript(js_code))
+        self._log("ログがクリップボードにコピーされました。")
 
     def on_value_change(self, change: Dict[str, Any]) -> None:
         with self.output:
@@ -684,4 +746,4 @@ class DataAnalysisWorkbench:
 def show_widgets():
     workbench = DataAnalysisWorkbench()
     DataAnalysisWorkbench.apply_custom_css()
-    display(workbench.layout, workbench.output)
+    display(workbench.layout)
