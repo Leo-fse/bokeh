@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import ipywidgets as widgets
 import numpy as np
 import pandas as pd
+import pi_data_fetch as pi
 from IPython.display import HTML, display
 
 from bokeh.embed import components, file_html
@@ -24,6 +25,8 @@ from bokeh.models import (
 )
 from bokeh.plotting import figure, output_file, save
 from bokeh.resources import CDN
+
+debug = True
 
 
 class Constants:
@@ -54,11 +57,14 @@ def dummy_data_fetch_api(
     tags: List[str], start_time: datetime, end_time: datetime, interval: str
 ) -> pd.DataFrame:
     """ダミーデータを生成するAPI関数"""
-    time_range = pd.date_range(start=start_time, end=end_time, freq=interval)
-    data = {"time": time_range}
-    for tag in tags:
-        data[tag] = np.random.randn(len(time_range))
-    return pd.DataFrame(data)
+    if debug:
+        time_range = pd.date_range(start=start_time, end=end_time, freq=interval)
+        data = {}
+        for tag in tags:
+            data[tag] = np.random.randn(len(time_range))
+        return pd.DataFrame(data, index=time_range)
+    else:
+        return pi.fetch_data(tags, start_time, end_time, interval)
 
 
 class SettingsError(Exception):
@@ -286,7 +292,7 @@ class GraphCreator:
         machine: str,
         data: pd.DataFrame,
     ) -> ColumnDataSource:
-        source_data = {"x": data["time"]}
+        source_data = {"x": data.index}
         for _, row in params_for_graph.iterrows():
             param = row["項目名"]
             col_name = tag_dict[param][machine]
