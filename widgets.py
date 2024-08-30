@@ -218,8 +218,14 @@ class GraphCreator:
         label_width = max_legend_length * 6
 
         graphs = []
+        shared_x_range = None  # 共有するX軸の範囲を保持する変数
+
         for graph_no in param_setting_df["Graph_No"].unique():
-            p = self._create_figure(graph_no)
+            if shared_x_range is None:
+                # 最初のグラフのX軸の範囲を作成
+                shared_x_range = DataRange1d()
+
+            p = self._create_figure(graph_no, shared_x_range)
             params_for_graph = param_setting_df[param_setting_df["Graph_No"] == graph_no]
             y_ranges = self._setup_y_axes(p, params_for_graph, axis_setting_df, graph_no)
             source = self._create_data_source(params_for_graph, tag_dict, machine, data)
@@ -234,7 +240,7 @@ class GraphCreator:
     def _calculate_max_legend_length(self, param_setting_df: pd.DataFrame) -> int:
         return max(len(row["凡例表示名"]) for _, row in param_setting_df.iterrows())
 
-    def _create_figure(self, graph_no: int) -> figure:
+    def _create_figure(self, graph_no: int, x_range: DataRange1d) -> figure:
         return figure(
             title=f"データグラフ (Graph_No: {graph_no})",
             x_axis_label="時間",
@@ -242,7 +248,8 @@ class GraphCreator:
             width=1200,
             height=400,
             tools="pan,wheel_zoom,box_zoom,reset,save",
-            sizing_mode="scale_width",  # 追加: グラフの幅を自動調整
+            sizing_mode="scale_width",
+            x_range=x_range,  # 共有するX軸の範囲を設定
         )
 
     def _setup_y_axes(
