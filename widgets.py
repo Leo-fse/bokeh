@@ -229,7 +229,7 @@ class GraphCreator:
             self._format_axes(p)
             graphs.append(p)
 
-        return column(graphs)
+        return column(graphs, sizing_mode="scale_width")
 
     def _calculate_max_legend_length(self, param_setting_df: pd.DataFrame) -> int:
         return max(len(row["凡例表示名"]) for _, row in param_setting_df.iterrows())
@@ -242,6 +242,7 @@ class GraphCreator:
             width=1200,
             height=400,
             tools="pan,wheel_zoom,box_zoom,reset,save",
+            sizing_mode="scale_width",  # 追加: グラフの幅を自動調整
         )
 
     def _setup_y_axes(
@@ -347,11 +348,16 @@ class GraphCreator:
 
     def _format_axes(self, p: figure) -> None:
         p.xaxis.formatter = DatetimeTickFormatter(
+            seconds="%H:%M:%S",
+            minutes="%H:%M:%S",
             hours="%Y-%m-%d %H:%M",
-            days="%Y-%m-%d %H:%M",
+            days="%Y-%m-%d",
+            months="%Y-%m",
+            years="%Y",
         )
         p.xaxis.major_label_orientation = 0.7
-        p.min_border_bottom = 100
+        p.min_border_left = 80  # 左側の余白を増やす
+        p.min_border_bottom = 80  # 下側の余白を増やす
 
 
 class WidgetManager:
