@@ -58,6 +58,7 @@ def dummy_data_fetch_api(
     tags: List[str], start_time: datetime, end_time: datetime, interval: str
 ) -> pd.DataFrame:
     """ダミーデータを生成するAPI関数"""
+    tags = list(set(tags))
     if debug:
         time_range = pd.date_range(start=start_time, end=end_time, freq=interval)
         data = {}
@@ -687,7 +688,7 @@ class DataAnalysisWorkbench:
 
         try:
             graph_layout = self.graph_creator.create_graph(self.fetched_data)
-            output_dir = f"output/{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            output_dir = f"output/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             os.makedirs(output_dir, exist_ok=True)
             output_file(f"{output_dir}/graphs.html")
 
