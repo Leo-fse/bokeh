@@ -90,18 +90,20 @@ class SettingsManager:
             tags_setting_df = setting_df_dict["tag"]
             machine_list = tags_setting_df.columns[2:].tolist()
             tag_dict = tags_setting_df.set_index("項目名").T.to_dict()
-
+            print(f"tags_setting_df: {tags_setting_df}")
             period_setting_df = setting_df_dict["period"]
             period_setting = period_setting_df.iloc[0].to_dict()
             machine = period_setting["Machine"]
             start_time = period_setting["開始日時"]
             end_time = period_setting["終了日時"]
             interval = period_setting["インターバル"]
-
             param_setting_df = setting_df_dict["param"]
             target_param_list = param_setting_df["項目名"].tolist()
-
             axis_setting_df = setting_df_dict["axis"]
+
+            target_tag_list = []
+            for param in target_param_list:
+                target_tag_list.append(tag_dict[param][machine])
 
             if not machine_list:
                 raise SettingsError("マシンリストが空です")
@@ -119,6 +121,7 @@ class SettingsManager:
                 "tag_dict": tag_dict,
                 "tags_setting_df": tags_setting_df,
                 "target_param_list": target_param_list,
+                "target_tag_list": target_tag_list,
                 "param_setting_df": param_setting_df,
                 "axis_setting_df": axis_setting_df,
             }
@@ -154,13 +157,7 @@ class DataFetcher:
 
         # タグの数を取得
         setting_data = self.settings_manager.get_setting_data()
-        param_tag_dict = dict(
-            zip(
-                setting_data["tags_setting_df"]["項目名"],
-                setting_data["tags_setting_df"][setting_data["machine"]],
-            )
-        )
-        num_tags = len(param_tag_dict)
+        num_tags = len(setting_data["target_tag_list"])
 
         # 予想されるデータフレームのサイズを計算（バイト単位）
         estimated_size_bytes = num_data_points * (
@@ -186,7 +183,7 @@ class DataFetcher:
             )
         )
 
-        tags = list(param_tag_dict.values())
+        tags = setting_data["target_tag_list"]
         self.workbench._log(
             f"開始時間: {start_time}, 終了時間: {end_time}, インターバル: {interval}"
         )
