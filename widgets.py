@@ -3,7 +3,7 @@ import os
 import tempfile
 import traceback
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import ipywidgets as widgets
@@ -126,7 +126,50 @@ class DataFetcher:
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
 
+    def _parse_interval(self, interval):
+        if interval.endswith("s"):
+            return pd.Timedelta(seconds=int(interval[:-1]))
+        elif interval.endswith("m"):
+            return pd.Timedelta(minutes=int(interval[:-1]))
+        elif interval.endswith("d"):
+            return pd.Timedelta(days=int(interval[:-1]))
+        else:
+            raise ValueError(f"不正なインターバル形式: {interval}")
+
+    def estimate_data_size(self, start_time, end_time, interval):
+        # インターバルをTimedeltaに変換
+        interval_timedelta = self._parse_interval(interval)
+
+        # データポイントの数を計算
+        time_range = end_time - start_time
+        num_data_points = int(time_range / interval_timedelta) + 1
+
+        # タグの数を取得
+        setting_data = self.settings_manager.get_setting_data()
+        param_tag_dict = dict(
+            zip(
+                setting_data["tags_setting_df"]["項目名"],
+                setting_data["tags_setting_df"][setting_data["machine"]],
+            )
+        )
+        num_tags = len(param_tag_dict)
+
+        # 予想されるデータフレームのサイズを計算（バイト単位）
+        estimated_size_bytes = num_data_points * (
+            8 + 8 * num_tags
+        )  # 8バイトはタイムスタンプ用、8バイトは各タグの値用
+
+        return num_data_points, num_tags, estimated_size_bytes
+
     def fetch_data(self, start_time, end_time, interval):
+        # データサイズの見積もり
+        num_data_points, num_tags, estimated_size_bytes = self.estimate_data_size(
+            start_time, end_time, interval
+        )
+        print(f"予想されるデータポイント数: {num_data_points}")
+        print(f"タグの数: {num_tags}")
+        print(f"予想されるデータサイズ: {estimated_size_bytes / (1024*1024):.2f} MB")
+
         setting_data = self.settings_manager.get_setting_data()
         param_tag_dict = dict(
             zip(
@@ -136,8 +179,18 @@ class DataFetcher:
         )
 
         tags = list(param_tag_dict.values())
-        df = dummy_data_fetch_api(tags, start_time, end_time, interval)
-        return df
+        print(f"取得するタグ: {tags}")
+        print(f"開始時間: {start_time}, 終了時間: {end_time}, インターバル: {interval}")
+
+        try:
+            df = dummy_data_fetch_api(tags, start_time, end_time, interval)
+            print(f"取得したデータの形状: {df.shape}")
+            print(f"データのカラム: {df.columns}")
+            print(f"データのサンプル:\n{df.head()}")
+            return df
+        except Exception as e:
+            print(f"データ取得中にエラーが発生しました: {str(e)}")
+            raise
 
 
 class GraphCreator:
@@ -540,9 +593,23 @@ class DataAnalysisWorkbench:
         start_time = self.widget_manager.widgets["start_time"].value
         end_time = self.widget_manager.widgets["end_time"].value
         interval = self.widget_manager.widgets["interval"].value
-        self.fetched_data = self.data_fetcher.fetch_data(start_time, end_time, interval)
 
-        self.widget_manager.widgets["data_fetch_status"].value = "データ取得完了"
+        # データサイズの見積もり
+        num_data_points, num_tags, estimated_size_bytes = self.data_fetcher.estimate_data_size(
+            start_time, end_time, interval
+        )
+        self._log(f"予想されるデータポイント数: {num_data_points}")
+        self._log(f"タグの数: {num_tags}")
+        self._log(f"予想されるデータサイズ: {estimated_size_bytes / (1024*1024):.2f} MB")
+
+        try:
+            self.fetched_data = self.data_fetcher.fetch_data(start_time, end_time, interval)
+            self.widget_manager.widgets["data_fetch_status"].value = "データ取得完了"
+            self._log(f"取得したデータの形状: {self.fetched_data.shape}")
+        except Exception as e:
+            self.widget_manager.widgets["data_fetch_status"].value = f"データ取得エラー: {str(e)}"
+            self._log(f"データ取得中にエラーが発生しました: {str(e)}")
+
         self._log(f"ステータス: {self.widget_manager.widgets['data_fetch_status'].value}")
 
     def on_file_upload(self, change):
