@@ -9,9 +9,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import ipywidgets as widgets
 import numpy as np
 import pandas as pd
-import pi_data_fetch as pi
 from IPython.display import HTML, display
 
+import pi_data_fetch as pi
 from bokeh.embed import components, file_html
 from bokeh.layouts import column
 from bokeh.models import (
@@ -185,7 +185,6 @@ class DataFetcher:
         )
 
         tags = list(param_tag_dict.values())
-        self.workbench._log(f"取得するタグ: {tags}")
         self.workbench._log(
             f"開始時間: {start_time}, 終了時間: {end_time}, インターバル: {interval}"
         )
@@ -193,8 +192,6 @@ class DataFetcher:
         try:
             df = dummy_data_fetch_api(tags, start_time, end_time, interval)
             self.workbench._log(f"取得したデータの形状: {df.shape}")
-            self.workbench._log(f"データのカラム: {df.columns}")
-            self.workbench._log(f"データのサンプル:\n{df.head()}")
 
             # 実際のデータサイズを計算
             actual_size_bytes = df.memory_usage(deep=True).sum()
@@ -441,7 +438,6 @@ class DataAnalysisWorkbench:
                 self._create_file_upload_section(),
                 self._create_data_fetch_section(),
                 self._create_graph_section(),
-                self._create_data_settings_section(),
                 self.log_accordion,
                 self.output,
             ]
@@ -476,39 +472,6 @@ class DataAnalysisWorkbench:
             layout=widgets.Layout(align_items="center", margin="10px 0"),
         )
         return section
-
-    def _create_data_settings_section(self) -> widgets.Accordion:
-        return widgets.Accordion(
-            children=[
-                widgets.VBox(
-                    [
-                        self.widget_manager.widgets["machine"],
-                        widgets.HBox(
-                            [
-                                self.widget_manager.widgets["start_time"],
-                                self.widget_manager.widgets["time_error"],
-                            ],
-                            layout=widgets.Layout(width="100%"),
-                        ),
-                        self.widget_manager.widgets["end_time"],
-                        self.widget_manager.widgets["interval"],
-                        widgets.HBox(
-                            [
-                                widgets.Box(layout=widgets.Layout(width="140px")),
-                                self.widget_manager.widgets["data_fetch"],
-                            ],
-                            layout=widgets.Layout(
-                                margin="20px 0 0 0", justify_content="flex-start"
-                            ),
-                        ),
-                    ],
-                    layout=widgets.Layout(width="auto", padding="10px"),
-                )
-            ],
-            selected_index=None,
-            layout=widgets.Layout(width="auto"),
-            titles=["データ取得設定"],
-        )
 
     def _create_event_handlers(self) -> None:
         self.widget_manager.widgets["data_fetch"].on_click(self.on_data_fetch_click)
