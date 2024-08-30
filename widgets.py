@@ -166,9 +166,9 @@ class DataFetcher:
         num_data_points, num_tags, estimated_size_bytes = self.estimate_data_size(
             start_time, end_time, interval
         )
-        print(f"予想されるデータポイント数: {num_data_points}")
-        print(f"タグの数: {num_tags}")
-        print(f"予想されるデータサイズ: {estimated_size_bytes / (1024*1024):.2f} MB")
+        self.workbench._log(f"予想されるデータポイント数: {num_data_points}")
+        self.workbench._log(f"タグの数: {num_tags}")
+        self.workbench._log(f"予想されるデータサイズ: {estimated_size_bytes / (1024*1024):.2f} MB")
 
         setting_data = self.settings_manager.get_setting_data()
         param_tag_dict = dict(
@@ -179,17 +179,24 @@ class DataFetcher:
         )
 
         tags = list(param_tag_dict.values())
-        print(f"取得するタグ: {tags}")
-        print(f"開始時間: {start_time}, 終了時間: {end_time}, インターバル: {interval}")
+        self.workbench._log(f"取得するタグ: {tags}")
+        self.workbench._log(
+            f"開始時間: {start_time}, 終了時間: {end_time}, インターバル: {interval}"
+        )
 
         try:
             df = dummy_data_fetch_api(tags, start_time, end_time, interval)
-            print(f"取得したデータの形状: {df.shape}")
-            print(f"データのカラム: {df.columns}")
-            print(f"データのサンプル:\n{df.head()}")
+            self.workbench._log(f"取得したデータの形状: {df.shape}")
+            self.workbench._log(f"データのカラム: {df.columns}")
+            self.workbench._log(f"データのサンプル:\n{df.head()}")
+
+            # 実際のデータサイズを計算
+            actual_size_bytes = df.memory_usage(deep=True).sum()
+            self.workbench._log(f"実際のデータサイズ: {actual_size_bytes / (1024*1024):.2f} MB")
+
             return df
         except Exception as e:
-            print(f"データ取得中にエラーが発生しました: {str(e)}")
+            self.workbench._log(f"データ取得中にエラーが発生しました: {str(e)}")
             raise
 
 
@@ -410,6 +417,7 @@ class DataAnalysisWorkbench:
     def __init__(self):
         self.settings_manager = SettingsManager()
         self.data_fetcher = DataFetcher(self.settings_manager)
+        self.data_fetcher.workbench = self
         self.graph_creator = GraphCreator(self.settings_manager)
         self.widget_manager = WidgetManager()
 
@@ -606,6 +614,15 @@ class DataAnalysisWorkbench:
             self.fetched_data = self.data_fetcher.fetch_data(start_time, end_time, interval)
             self.widget_manager.widgets["data_fetch_status"].value = "データ取得完了"
             self._log(f"取得したデータの形状: {self.fetched_data.shape}")
+
+            # 実際のデータサイズを計算
+            actual_size_bytes = self.fetched_data.memory_usage(deep=True).sum()
+            self._log(f"実際のデータサイズ: {actual_size_bytes / (1024*1024):.2f} MB")
+
+            # 予想サイズと実際のサイズの差を計算
+            size_difference = actual_size_bytes - estimated_size_bytes
+            self._log(f"サイズの差異: {size_difference / (1024*1024):.2f} MB")
+
         except Exception as e:
             self.widget_manager.widgets["data_fetch_status"].value = f"データ取得エラー: {str(e)}"
             self._log(f"データ取得中にエラーが発生しました: {str(e)}")
