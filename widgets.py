@@ -693,7 +693,7 @@ class DataAnalysisWorkbench:
             graph_layout = self.graph_creator.create_graph(self.fetched_data)
             output_dir = f"output/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             os.makedirs(output_dir, exist_ok=True)
-            output_file(f"{output_dir}/graphs.html")
+            output_file(f"{output_dir}/graphs.html", mode="inline")
 
             # データをCSVに保存
             self.fetched_data.to_csv(f"{output_dir}/data.csv", encoding="utf-8", index=True)
