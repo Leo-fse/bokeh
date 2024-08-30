@@ -687,9 +687,15 @@ class DataAnalysisWorkbench:
 
         try:
             graph_layout = self.graph_creator.create_graph(self.fetched_data)
+            output_dir = f"output/{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            os.makedirs(output_dir, exist_ok=True)
+            output_file(f"{output_dir}/graphs.html")
+
+            # データをCSVに保存
+            self.fetched_data.to_csv(f"{output_dir}/data.csv", encoding="utf-8", index=False)
             self.widget_manager.widgets[
                 "graph_status"
-            ].value = "グラフ作成完了。output/graphs.htmlに保存され、以下に表示されています。"
+            ].value = f"グラフ作成完了。{output_dir}にグラフとデータが保存されています。"
 
             # グラフをノートブック上に表示
             with self.output:
