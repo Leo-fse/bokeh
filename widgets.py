@@ -1,9 +1,11 @@
 import io
 import os
 import tempfile
+import tkinter as tk
 import traceback
 import webbrowser
 from datetime import datetime, timedelta
+from tkinter import filedialog
 from typing import Any, Dict, List, Optional, Tuple
 
 import ipywidgets as widgets
@@ -475,7 +477,7 @@ class WidgetManager:
         self.widgets = self._create_widgets()
 
     def _create_widgets(self) -> Dict[str, widgets.Widget]:
-        return {
+        widgets_dict = {
             "machine": self._create_single_widget(
                 widgets.Dropdown, options=Constants.MACHINE_OPTIONS, description="Machine:"
             ),
@@ -496,6 +498,8 @@ class WidgetManager:
             ),
             "data_fetch": widgets.Button(description="データ取得", layout=Constants.BUTTON_LAYOUT),
             "data_fetch_status": widgets.HTML(value=""),
+            "data_export": widgets.Button(description="データ出力", layout=Constants.BUTTON_LAYOUT),
+            "data_export_status": widgets.HTML(value=""),
             "file_error": widgets.HTML(value="", layout=widgets.Layout(width="auto")),
             "status": widgets.HTML(
                 value="",
@@ -510,6 +514,7 @@ class WidgetManager:
             ),
             "graph_status": widgets.HTML(value=""),
         }
+        return widgets_dict
 
     def _create_single_widget(self, widget_type: type, **kwargs) -> widgets.Widget:
         widget_kwargs = Constants.WIDGET_STYLE.copy()
@@ -573,6 +578,7 @@ class DataAnalysisWorkbench:
                 self._create_file_upload_section(),
                 self._create_data_fetch_section(),
                 self._create_graph_section(),
+                self._create_data_output_section(),
                 self.log_accordion,
                 self.output,
             ]
@@ -593,6 +599,16 @@ class DataAnalysisWorkbench:
             [
                 self.widget_manager.widgets["data_fetch"],
                 self.widget_manager.widgets["data_fetch_status"],
+            ],
+            layout=widgets.Layout(align_items="center", margin="10px 0"),
+        )
+        return section
+
+    def _create_data_output_section(self) -> widgets.HBox:
+        section = widgets.HBox(
+            [
+                self.widget_manager.widgets["data_export"],
+                self.widget_manager.widgets["data_export_status"],
             ],
             layout=widgets.Layout(align_items="center", margin="10px 0"),
         )
@@ -621,6 +637,7 @@ class DataAnalysisWorkbench:
             self.widget_manager.widgets[widget_name].observe(self.on_value_change, names="value")
         self.widget_manager.widgets["uploader"].observe(self.on_file_upload, names="value")
         self.widget_manager.widgets["graph_create"].on_click(self.on_graph_create_click)
+        self.widget_manager.widgets["data_export"].on_click(self.on_data_output_click)
 
     def validate_inputs(self) -> bool:
         is_valid = True
@@ -751,6 +768,9 @@ class DataAnalysisWorkbench:
             size_difference = actual_size_bytes - estimated_size_bytes
             self._log(f"サイズの差異: {size_difference / (1024*1024):.2f} MB")
 
+            # データ出力ボタンを有効化
+            self.widget_manager.widgets["data_export"].disabled = False
+
         except Exception as e:
             self.widget_manager.widgets["data_fetch_status"].value = f"データ取得エラー: {str(e)}"
             self._log(f"データ取得中にエラーが発生しました: {str(e)}")
@@ -801,6 +821,7 @@ class DataAnalysisWorkbench:
             "interval_value",
             "interval_unit",
             "data_fetch",
+            "data_export",
         ]:
             self.widget_manager.widgets[widget_name].disabled = True
 
@@ -818,6 +839,7 @@ class DataAnalysisWorkbench:
     def _set_initial_state(self):
         self._set_initial_message()
         self._disable_widgets()
+        self.widget_manager.widgets["data_export"].disabled = True
 
     def _log(self, message: str) -> None:
         with self.log_output:
@@ -846,13 +868,9 @@ class DataAnalysisWorkbench:
             os.makedirs(output_dir, exist_ok=True)
             output_file(f"{output_dir}/graphs.html", mode="inline")
 
-            # データをCSVに保存（ローカルタイム）
-            self.fetched_data.to_csv(
-                f"{output_dir}/data_local_time.csv", encoding="utf-8", index=True
-            )
             self.widget_manager.widgets[
                 "graph_status"
-            ].value = f"グラフ作成完了。{output_dir}にグラフとデータ（ローカルタイム）が保存されています。"
+            ].value = f"グラフ作成完了。{output_dir}にグラフが保存されています。"
 
             # グラフをノートブック上に表示
             with self.output:
@@ -904,6 +922,55 @@ class DataAnalysisWorkbench:
     def on_value_change(self, change: Dict[str, Any]) -> None:
         with self.output:
             self.validate_inputs()
+
+    def on_data_output_click(self, b):
+        self._log("データ出力ボタンがクリックされました")
+        self.widget_manager.widgets["data_export_status"].value = "データ出力中..."
+        self._log(f"ステータス: {self.widget_manager.widgets['data_export_status'].value}")
+
+        if self.fetched_data is None or self.fetched_data.empty:
+            self.widget_manager.widgets[
+                "data_export_status"
+            ].value = "データが取得されていないか、空です"
+            return
+
+        try:
+            output_dir = self._select_output_directory()
+            if output_dir is None:
+                self.widget_manager.widgets[
+                    "data_export_status"
+                ].value = "出力先が選択されませんでした"
+                return
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(output_dir, f"data_export_{timestamp}.csv")
+            self.fetched_data.to_csv(output_file, index=False, encoding="utf-8-sig")
+
+            self.widget_manager.widgets[
+                "data_export_status"
+            ].value = f"データ出力完了。{output_file}にデータが保存されました。"
+        except Exception as e:
+            self._log(f"データ出力中にエラーが発生しました: {str(e)}")
+            self.widget_manager.widgets["data_export_status"].value = f"データ出力エラー: {str(e)}"
+            self._error_log(traceback.format_exc())
+
+        self._log(f"ステータス: {self.widget_manager.widgets['data_export_status'].value}")
+
+    def _select_output_directory(self):
+        root = tk.Tk()
+        root.withdraw()  # メインウィンドウを非表示にする
+
+        # カレントディレクトリ内のoutputフォルダをデフォルトとして設定
+        default_dir = os.path.join(os.getcwd(), "output")
+
+        # outputフォルダが存在しない場合は作成
+        if not os.path.exists(default_dir):
+            os.makedirs(default_dir)
+
+        directory = filedialog.askdirectory(
+            title="データ出力先を選択してください", initialdir=default_dir
+        )
+        return directory if directory else None
 
 
 def show_widgets():
