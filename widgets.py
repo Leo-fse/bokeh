@@ -116,6 +116,8 @@ class SettingsManager:
             start_time = period_setting["開始日時"]
             end_time = period_setting["終了日時"]
             interval = period_setting["インターバル"]
+            utc_offset = period_setting.get("時差（UTC基準）", 0)  # 新しい設定項目
+
             param_setting_df = setting_df_dict["param"]
             target_param_list = param_setting_df["項目名"].tolist()
             axis_setting_df = setting_df_dict["axis"]
@@ -137,6 +139,7 @@ class SettingsManager:
                 "start_time": start_time,
                 "end_time": end_time,
                 "interval": interval,
+                "utc_offset": utc_offset,  # 新しい設定項目を追加
                 "tag_dict": tag_dict,
                 "tags_setting_df": tags_setting_df,
                 "target_param_list": target_param_list,
@@ -231,8 +234,18 @@ class DataFetcher:
             f"開始時間: {start_time}, 終了時間: {end_time}, インターバル: {interval}"
         )
 
+        utc_offset = setting_data["utc_offset"]
+
+        # UTCに変換
+        start_time_utc = start_time - timedelta(hours=utc_offset)
+        end_time_utc = end_time - timedelta(hours=utc_offset)
+
         try:
-            df = dummy_data_fetch_api(tags, start_time, end_time, interval)
+            df = dummy_data_fetch_api(tags, start_time_utc, end_time_utc, interval)
+
+            # UTCからローカル時間に戻す
+            df.index = df.index + timedelta(hours=utc_offset)
+
             self.workbench._log(f"取得したデータの形状: {df.shape}")
 
             # 実際のデータサイズを計算
