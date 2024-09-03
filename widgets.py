@@ -236,7 +236,7 @@ class DataFetcher:
 
         utc_offset = setting_data["utc_offset"]
 
-        # UTCに変換
+        # ローカル時間からUTCに変換
         start_time_utc = start_time - timedelta(hours=utc_offset)
         end_time_utc = end_time - timedelta(hours=utc_offset)
 
@@ -269,6 +269,9 @@ class GraphCreator:
         tag_dict = setting_data["tag_dict"]
         machine = setting_data["machine"]
         axis_setting_df = setting_data["axis_setting_df"]
+        utc_offset = setting_data["utc_offset"]  # UTCオフセットを取得
+
+        # データはすでにローカルタイムなので、変換は不要
 
         max_legend_length = self._calculate_max_legend_length(param_setting_df)
         label_width = max_legend_length * 6
@@ -421,6 +424,9 @@ class GraphCreator:
         p.xaxis.major_label_orientation = 0.7
         p.min_border_left = 80  # 左側の余白を増やす
         p.min_border_bottom = 80  # 下側の余白を増やす
+
+        # X軸のラベルにローカルタイムであることを明記
+        p.xaxis.axis_label = "時間 (ローカルタイム)"
 
 
 class WidgetManager:
@@ -758,11 +764,13 @@ class DataAnalysisWorkbench:
             os.makedirs(output_dir, exist_ok=True)
             output_file(f"{output_dir}/graphs.html", mode="inline")
 
-            # データをCSVに保存
-            self.fetched_data.to_csv(f"{output_dir}/data.csv", encoding="utf-8", index=True)
+            # データをCSVに保存（ローカルタイム）
+            self.fetched_data.to_csv(
+                f"{output_dir}/data_local_time.csv", encoding="utf-8", index=True
+            )
             self.widget_manager.widgets[
                 "graph_status"
-            ].value = f"グラフ作成完了。{output_dir}にグラフとデータが保存されています。"
+            ].value = f"グラフ作成完了。{output_dir}にグラフとデータ（ローカルタイム）が保存されています。"
 
             # グラフをノートブック上に表示
             with self.output:
