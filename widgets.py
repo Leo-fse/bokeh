@@ -771,10 +771,17 @@ class DataAnalysisWorkbench:
             # データ出力ボタンを有効化
             self.widget_manager.widgets["data_export"].disabled = False
 
+            # グラフ作成ボタンを有効化
+            self.widget_manager.widgets["graph_create"].disabled = False
+
         except Exception as e:
             self.widget_manager.widgets["data_fetch_status"].value = f"データ取得エラー: {str(e)}"
             self._log(f"データ取得中にエラーが発生しました: {str(e)}")
             self._error_log(traceback.format_exc())
+
+            # エラー時にボタンを無効化
+            self.widget_manager.widgets["data_export"].disabled = True
+            self.widget_manager.widgets["graph_create"].disabled = True
 
         self._log(f"ステータス: {self.widget_manager.widgets['data_fetch_status'].value}")
 
@@ -800,7 +807,6 @@ class DataAnalysisWorkbench:
                     ].value = (
                         '<span style="color: green;">設定ファイルを正常に読み込みました</span>'
                     )
-                self.widget_manager.widgets["status"].value = ""
             except Exception as e:
                 self.widget_manager.widgets[
                     "file_error"
@@ -822,6 +828,7 @@ class DataAnalysisWorkbench:
             "interval_unit",
             "data_fetch",
             "data_export",
+            "graph_create",  # グラフ作成ボタンも無効化
         ]:
             self.widget_manager.widgets[widget_name].disabled = True
 
@@ -835,11 +842,13 @@ class DataAnalysisWorkbench:
             "data_fetch",
         ]:
             self.widget_manager.widgets[widget_name].disabled = False
+        # データ出力とグラフ作成ボタンは、データ取得後に有効化されるため、ここでは有効化しない
 
     def _set_initial_state(self):
         self._set_initial_message()
         self._disable_widgets()
         self.widget_manager.widgets["data_export"].disabled = True
+        self.widget_manager.widgets["graph_create"].disabled = True
 
     def _log(self, message: str) -> None:
         with self.log_output:
