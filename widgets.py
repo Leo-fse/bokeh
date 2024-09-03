@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import tempfile
 import tkinter as tk
 import traceback
@@ -875,7 +876,8 @@ class DataAnalysisWorkbench:
             graph_layout = self.graph_creator.create_graph(self.fetched_data)
             setting_data = self.settings_manager.get_setting_data()
             page_title = setting_data.get("page_title", "データグラフ")
-            output_dir = f"output/{page_title}"
+            sanitized_title = self._sanitize_filename(page_title)
+            output_dir = f"output/{sanitized_title}"
             os.makedirs(output_dir, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file(f"{output_dir}/graphs_{timestamp}.html", mode="inline")
@@ -951,7 +953,8 @@ class DataAnalysisWorkbench:
         try:
             setting_data = self.settings_manager.get_setting_data()
             page_title = setting_data.get("page_title", "データグラフ")
-            output_dir = os.path.join("output", page_title)
+            sanitized_title = self._sanitize_filename(page_title)
+            output_dir = os.path.join("output", sanitized_title)
             os.makedirs(output_dir, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -968,6 +971,10 @@ class DataAnalysisWorkbench:
             self._error_log(traceback.format_exc())
 
         self._log(f"ステータス: {self.widget_manager.widgets['data_export_status'].value}")
+
+    def _sanitize_filename(self, filename):
+        # ファイル名に使用できない文字を_に置換
+        return re.sub(r'[\\/*?:"<>|]', "_", filename)
 
 
 def show_widgets():
