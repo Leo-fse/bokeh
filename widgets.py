@@ -959,7 +959,22 @@ class DataAnalysisWorkbench:
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = os.path.join(output_dir, f"data_export_{timestamp}.csv")
-            self.fetched_data.to_csv(output_file, index=False, encoding="utf-8-sig")
+
+            # データフレームのヘッダーを項目名とタグのマルチインデックスに変更
+            tag_dict = setting_data["tag_dict"]
+            machine = setting_data["machine"]
+            target_param_list = setting_data["target_param_list"]
+
+            new_columns = pd.MultiIndex.from_tuples(
+                [(item, tag_dict[item][machine]) for item in target_param_list],
+                names=["項目名", "タグ"],
+            )
+
+            output_df = self.fetched_data.copy()
+            output_df = output_df[[tag_dict[item][machine] for item in target_param_list]]
+            output_df.columns = new_columns
+
+            output_df.to_csv(output_file, index=True, encoding="utf-8-sig")
 
             relative_path = os.path.relpath(output_file)
             self.widget_manager.widgets[
