@@ -14,12 +14,13 @@ from IPython.display import HTML, Javascript, display
 import pi_data_fetch as pi
 from bokeh.embed import components, file_html
 from bokeh.io import output_notebook, show
-from bokeh.layouts import column
+from bokeh.layouts import column, row
 from bokeh.models import (
     ColumnDataSource,
     CustomJS,
     DataRange1d,
     DatetimeTickFormatter,
+    Div,
     HoverTool,
     Legend,
     LinearAxis,
@@ -118,14 +119,14 @@ class SettingsManager:
             tags_setting_df = setting_df_dict["tag"]
             machine_list = tags_setting_df.columns[2:].tolist()
             tag_dict = tags_setting_df.set_index("項目名").T.to_dict()
-            print(f"tags_setting_df: {tags_setting_df}")
             period_setting_df = setting_df_dict["period"]
             period_setting = period_setting_df.iloc[0].to_dict()
             machine = period_setting["Machine"]
             start_time = period_setting["開始日時"]
             end_time = period_setting["終了日時"]
             interval = period_setting["インターバル"]
-            utc_offset = period_setting.get("時差（UTC基準）", 0)  # 新しい設定項目
+            utc_offset = period_setting.get("時差（UTC基準）", 0)
+            page_title = period_setting.get("ページタイトル", "データグラフ")  # デフォルト値を設定
 
             param_setting_df = setting_df_dict["param"]
             target_param_list = param_setting_df["項目名"].tolist()
@@ -148,7 +149,8 @@ class SettingsManager:
                 "start_time": start_time,
                 "end_time": end_time,
                 "interval": interval,
-                "utc_offset": utc_offset,  # 新しい設定項目を追加
+                "utc_offset": utc_offset,
+                "page_title": page_title,
                 "tag_dict": tag_dict,
                 "tags_setting_df": tags_setting_df,
                 "target_param_list": target_param_list,
@@ -156,6 +158,8 @@ class SettingsManager:
                 "param_setting_df": param_setting_df,
                 "axis_setting_df": axis_setting_df,
             }
+
+            print(f"Loaded page title: {page_title}")  # デバッグ用出力
 
         except Exception as e:
             raise SettingsError(f"設定データの取得中にエラーが発生しました: {str(e)}")
@@ -299,19 +303,19 @@ class GraphCreator:
         tag_dict = setting_data["tag_dict"]
         machine = setting_data["machine"]
         axis_setting_df = setting_data["axis_setting_df"]
-        utc_offset = setting_data["utc_offset"]  # UTCオフセットを取得
+        utc_offset = setting_data["utc_offset"]
+        page_title = setting_data["page_title"]
 
-        # データはすでにローカルタイムなので、変換は不要
+        print(f"Creating graph with title: {page_title}")  # デバッグ用出力
 
         max_legend_length = self._calculate_max_legend_length(param_setting_df)
         label_width = max_legend_length * 6
 
         graphs = []
-        shared_x_range = None  # 共有するX軸の範囲を保持する変数
+        shared_x_range = None
 
         for graph_no in param_setting_df["Graph_No"].unique():
             if shared_x_range is None:
-                # 最初のグラフのX軸の範囲を作成
                 shared_x_range = DataRange1d()
 
             p = self._create_figure(graph_no, shared_x_range)
@@ -324,21 +328,27 @@ class GraphCreator:
             self._format_axes(p)
             graphs.append(p)
 
-        return column(graphs, sizing_mode="scale_width")
+        # ページタイトルを作成（下線付き）
+        title_div = Div(text=f"<h1 style='text-decoration: underline;'>{page_title}</h1>")
+
+        # タイトルとグラフを組み合わせる
+        layout = column(title_div, *graphs, sizing_mode="scale_width")
+
+        return layout
 
     def _calculate_max_legend_length(self, param_setting_df: pd.DataFrame) -> int:
         return max(len(row["凡例表示名"]) for _, row in param_setting_df.iterrows())
 
     def _create_figure(self, graph_no: int, x_range: DataRange1d) -> figure:
         return figure(
-            title=f"データグラフ (Graph_No: {graph_no})",
+            title=f"Graph_No: {graph_no}",
             x_axis_label="時間",
             x_axis_type="datetime",
             width=1200,
             height=400,
             tools="pan,wheel_zoom,box_zoom,reset,save",
             sizing_mode="scale_width",
-            x_range=x_range,  # 共有するX軸の範囲を設定
+            x_range=x_range,
         )
 
     def _setup_y_axes(
@@ -769,7 +779,6 @@ class DataAnalysisWorkbench:
                     ].value = (
                         '<span style="color: green;">設定ファイルを正常に読み込みました</span>'
                     )
-                self.widget_manager.widgets["status"].value = ""
             except Exception as e:
                 self.widget_manager.widgets[
                     "file_error"
