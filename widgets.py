@@ -14,7 +14,7 @@ from IPython.display import HTML, Javascript, display
 import pi_data_fetch as pi
 from bokeh.embed import components, file_html
 from bokeh.io import output_notebook, show
-from bokeh.layouts import column, row
+from bokeh.layouts import column
 from bokeh.models import (
     ColumnDataSource,
     CustomJS,
@@ -74,7 +74,7 @@ def dummy_data_fetch_api(
         if unit == "s":
             freq = f"{value}S"
         elif unit == "m":
-            freq = f"{value}T"
+            freq = f"{value}min"  # 'T' を 'min' に変更
         elif unit == "h":
             freq = f"{value}H"
         elif unit == "d":
@@ -126,11 +126,14 @@ class SettingsManager:
             end_time = period_setting["終了日時"]
             interval = period_setting["インターバル"]
             utc_offset = period_setting.get("時差（UTC基準）", 0)
-            page_title = period_setting.get("ページタイトル", "データグラフ")  # デフォルト値を設定
+            page_title = period_setting.get(
+                "ページタイトル", "データグラフ"
+            )  # periodシートからページタイトルを取得
 
             param_setting_df = setting_df_dict["param"]
-            target_param_list = param_setting_df["項目名"].tolist()
             axis_setting_df = setting_df_dict["axis"]
+
+            target_param_list = param_setting_df["項目名"].tolist()
 
             target_tag_list = []
             for param in target_param_list:
@@ -150,17 +153,17 @@ class SettingsManager:
                 "end_time": end_time,
                 "interval": interval,
                 "utc_offset": utc_offset,
-                "page_title": page_title,
                 "tag_dict": tag_dict,
                 "tags_setting_df": tags_setting_df,
                 "target_param_list": target_param_list,
                 "target_tag_list": target_tag_list,
                 "param_setting_df": param_setting_df,
                 "axis_setting_df": axis_setting_df,
+                "page_title": page_title,  # ページタイトルを追加
             }
 
-            print(f"Loaded page title: {page_title}")  # デバッグ用出力
-
+        except KeyError as e:
+            raise SettingsError(f"必要なカラムが見つかりません: {str(e)}")
         except Exception as e:
             raise SettingsError(f"設定データの取得中にエラーが発生しました: {str(e)}")
 
@@ -303,19 +306,20 @@ class GraphCreator:
         tag_dict = setting_data["tag_dict"]
         machine = setting_data["machine"]
         axis_setting_df = setting_data["axis_setting_df"]
-        utc_offset = setting_data["utc_offset"]
-        page_title = setting_data["page_title"]
+        utc_offset = setting_data["utc_offset"]  # UTCオフセットを取得
+        page_title = setting_data.get("page_title", "データグラフ")  # ページタイトルを取得
 
-        print(f"Creating graph with title: {page_title}")  # デバッグ用出力
+        # データはすでにローカルタイムなので、変換は不要
 
         max_legend_length = self._calculate_max_legend_length(param_setting_df)
         label_width = max_legend_length * 6
 
         graphs = []
-        shared_x_range = None
+        shared_x_range = None  # 共有するX軸の範囲を保持する変数
 
         for graph_no in param_setting_df["Graph_No"].unique():
             if shared_x_range is None:
+                # 最初のグラフのX軸の範囲を作成
                 shared_x_range = DataRange1d()
 
             p = self._create_figure(graph_no, shared_x_range)
@@ -328,27 +332,24 @@ class GraphCreator:
             self._format_axes(p)
             graphs.append(p)
 
-        # ページタイトルを作成（下線付き）
-        title_div = Div(text=f"<h1 style='text-decoration: underline;'>{page_title}</h1>")
+        layout = column(graphs, sizing_mode="scale_width")
 
-        # タイトルとグラフを組み合わせる
-        layout = column(title_div, *graphs, sizing_mode="scale_width")
-
-        return layout
+        # ページタイトルを追加
+        title_div = Div(text=f"<h1>{page_title}</h1>", style={"text-align": "center"})
+        return column(title_div, layout)
 
     def _calculate_max_legend_length(self, param_setting_df: pd.DataFrame) -> int:
         return max(len(row["凡例表示名"]) for _, row in param_setting_df.iterrows())
 
     def _create_figure(self, graph_no: int, x_range: DataRange1d) -> figure:
         return figure(
-            title=f"Graph_No: {graph_no}",
             x_axis_label="時間",
             x_axis_type="datetime",
             width=1200,
             height=400,
             tools="pan,wheel_zoom,box_zoom,reset,save",
             sizing_mode="scale_width",
-            x_range=x_range,
+            x_range=x_range,  # 共有するX軸の範囲を設定
         )
 
     def _setup_y_axes(
@@ -779,6 +780,7 @@ class DataAnalysisWorkbench:
                     ].value = (
                         '<span style="color: green;">設定ファイルを正常に読み込みました</span>'
                     )
+                self.widget_manager.widgets["status"].value = ""
             except Exception as e:
                 self.widget_manager.widgets[
                     "file_error"
