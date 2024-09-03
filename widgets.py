@@ -32,7 +32,7 @@ debug = True
 
 class Constants:
     MACHINE_OPTIONS: List[str] = ["machine1", "machine2", "machine3"]
-    INTERVAL_OPTIONS: List[str] = ["1s", "1m", "1d"]
+    INTERVAL_OPTIONS: List[str] = ["1s", "1m", "1h", "1d", "1w", "1mo", "1y"]
     WIDGET_STYLE: Dict[str, Any] = {
         "layout": widgets.Layout(width="300px", height="32px"),
         "style": {"description_width": "100px"},
@@ -60,7 +60,26 @@ def dummy_data_fetch_api(
     """ダミーデータを生成するAPI関数"""
     tags = list(set(tags))
     if debug:
-        time_range = pd.date_range(start=start_time, end=end_time, freq=interval)
+        if interval.endswith("mo"):
+            # 月単位の場合、カスタム処理を行う
+            num_months = int(interval[:-2])
+            time_range = pd.date_range(start=start_time, end=end_time, freq=f"{num_months}MS")
+        else:
+            # インターバルを解析して適切な頻度を設定
+            if interval.endswith("m"):
+                freq = f"{interval[:-1]}T"  # 'T'は分を表す
+            elif interval.endswith("h"):
+                freq = f"{interval[:-1]}H"
+            elif interval.endswith("d"):
+                freq = f"{interval[:-1]}D"
+            elif interval.endswith("w"):
+                freq = f"{interval[:-1]}W"
+            elif interval.endswith("y"):
+                freq = f"{interval[:-1]}Y"
+            else:
+                freq = interval
+            time_range = pd.date_range(start=start_time, end=end_time, freq=freq)
+
         data = {}
         for tag in tags:
             data[tag] = np.random.randn(len(time_range))
@@ -142,18 +161,42 @@ class DataFetcher:
             return pd.Timedelta(seconds=int(interval[:-1]))
         elif interval.endswith("m"):
             return pd.Timedelta(minutes=int(interval[:-1]))
+        elif interval.endswith("h"):
+            return pd.Timedelta(hours=int(interval[:-1]))
         elif interval.endswith("d"):
             return pd.Timedelta(days=int(interval[:-1]))
+        elif interval.endswith("w"):
+            return pd.Timedelta(weeks=int(interval[:-1]))
+        elif interval.endswith("mo"):
+            return pd.DateOffset(months=int(interval[:-2]))  # 'mo'を月として解釈
+        elif interval.endswith("y"):
+            return pd.DateOffset(years=int(interval[:-1]))
         else:
             raise ValueError(f"不正なインターバル形式: {interval}")
 
     def estimate_data_size(self, start_time, end_time, interval):
-        # インターバルをTimedeltaに変換
         interval_timedelta = self._parse_interval(interval)
 
-        # データポイントの数を計算
-        time_range = end_time - start_time
-        num_data_points = int(time_range / interval_timedelta) + 1
+        if isinstance(interval_timedelta, pd.Timedelta):
+            # Timedeltaの場合は直接計算
+            num_data_points = int((end_time - start_time) / interval_timedelta) + 1
+        elif isinstance(interval_timedelta, pd.DateOffset):
+            # DateOffsetの場合は概算で計算
+            if interval.endswith("mo"):
+                months = int(interval[:-2])
+                num_data_points = (
+                    (end_time.year - start_time.year) * 12 + end_time.month - start_time.month
+                ) // months + 1
+            elif interval.endswith("y"):
+                years = int(interval[:-1])
+                num_data_points = (end_time.year - start_time.year) // years + 1
+            else:
+                # その他の場合（週単位など）は概算
+                approx_days = (end_time - start_time).days
+                approx_interval_days = (
+                    interval_timedelta.days if hasattr(interval_timedelta, "days") else 7
+                )  # 週単位の場合
+                num_data_points = approx_days // approx_interval_days + 1
 
         # タグの数を取得
         setting_data = self.settings_manager.get_setting_data()
