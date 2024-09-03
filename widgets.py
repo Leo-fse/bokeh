@@ -335,7 +335,7 @@ class GraphCreator:
         layout = column(graphs, sizing_mode="scale_width")
 
         # ページタイトルを追加
-        title_div = Div(text=f"<h1>{page_title}</h1>", style={"text-align": "center"})
+        title_div = Div(text=f"<h1 style='text-decoration: underline;'>{page_title}</h1>")
         return column(title_div, layout)
 
     def _calculate_max_legend_length(self, param_setting_df: pd.DataFrame) -> int:
