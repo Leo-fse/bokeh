@@ -32,7 +32,7 @@ debug = True
 
 class Constants:
     MACHINE_OPTIONS: List[str] = ["machine1", "machine2", "machine3"]
-    INTERVAL_OPTIONS: List[str] = ["1s", "1m", "1h", "1d", "1w", "1mo", "1y"]
+    INTERVAL_UNITS: List[str] = ["s", "m", "h", "d", "w", "mo", "y"]
     WIDGET_STYLE: Dict[str, Any] = {
         "layout": widgets.Layout(width="300px", height="32px"),
         "style": {"description_width": "100px"},
@@ -60,25 +60,34 @@ def dummy_data_fetch_api(
     """ダミーデータを生成するAPI関数"""
     tags = list(set(tags))
     if debug:
-        if interval.endswith("mo"):
-            # 月単位の場合、カスタム処理を行う
-            num_months = int(interval[:-2])
-            time_range = pd.date_range(start=start_time, end=end_time, freq=f"{num_months}MS")
+        # インターバルを解析して適切な頻度を設定
+        import re
+
+        match = re.match(r"^(\d+)([a-zA-Z]+)$", interval)
+        if not match:
+            raise ValueError(f"不正なインターバル形式: {interval}")
+
+        value, unit = match.groups()
+        value = int(value)
+
+        if unit == "s":
+            freq = f"{value}S"
+        elif unit == "m":
+            freq = f"{value}T"
+        elif unit == "h":
+            freq = f"{value}H"
+        elif unit == "d":
+            freq = f"{value}D"
+        elif unit == "w":
+            freq = f"{value}W"
+        elif unit == "mo":
+            freq = f"{value}MS"
+        elif unit == "y":
+            freq = f"{value}YS"
         else:
-            # インターバルを解析して適切な頻度を設定
-            if interval.endswith("m"):
-                freq = f"{interval[:-1]}T"  # 'T'は分を表す
-            elif interval.endswith("h"):
-                freq = f"{interval[:-1]}H"
-            elif interval.endswith("d"):
-                freq = f"{interval[:-1]}D"
-            elif interval.endswith("w"):
-                freq = f"{interval[:-1]}W"
-            elif interval.endswith("y"):
-                freq = f"{interval[:-1]}Y"
-            else:
-                freq = interval
-            time_range = pd.date_range(start=start_time, end=end_time, freq=freq)
+            raise ValueError(f"不正なインターバル単位: {unit}")
+
+        time_range = pd.date_range(start=start_time, end=end_time, freq=freq)
 
         data = {}
         for tag in tags:
@@ -130,7 +139,7 @@ class SettingsManager:
                 raise SettingsError("マシンリストが空です")
             if not isinstance(start_time, datetime) or not isinstance(end_time, datetime):
                 raise SettingsError("開始時刻または終了時刻が正しい日時形式ではありません")
-            if interval not in Constants.INTERVAL_OPTIONS:
+            if not self._is_valid_interval(interval):
                 raise SettingsError(f"無効なインターバル値です: {interval}")
 
             self.setting_data = {
@@ -154,28 +163,49 @@ class SettingsManager:
     def get_setting_data(self):
         return self.setting_data
 
+    @staticmethod
+    def _is_valid_interval(interval: str) -> bool:
+        # 数値部分と単位部分に分割
+        import re
+
+        match = re.match(r"^(\d+)([a-zA-Z]+)$", interval)
+        if not match:
+            return False
+        value, unit = match.groups()
+        # 単位が有効かチェック
+        return unit in Constants.INTERVAL_UNITS
+
 
 class DataFetcher:
     def __init__(self, settings_manager):
         self.settings_manager = settings_manager
 
     def _parse_interval(self, interval):
-        if interval.endswith("s"):
-            return pd.Timedelta(seconds=int(interval[:-1]))
-        elif interval.endswith("m"):
-            return pd.Timedelta(minutes=int(interval[:-1]))
-        elif interval.endswith("h"):
-            return pd.Timedelta(hours=int(interval[:-1]))
-        elif interval.endswith("d"):
-            return pd.Timedelta(days=int(interval[:-1]))
-        elif interval.endswith("w"):
-            return pd.Timedelta(weeks=int(interval[:-1]))
-        elif interval.endswith("mo"):
-            return pd.DateOffset(months=int(interval[:-2]))  # 'mo'を月として解釈
-        elif interval.endswith("y"):
-            return pd.DateOffset(years=int(interval[:-1]))
-        else:
+        import re
+
+        match = re.match(r"^(\d+)([a-zA-Z]+)$", interval)
+        if not match:
             raise ValueError(f"不正なインターバル形式: {interval}")
+
+        value, unit = match.groups()
+        value = int(value)
+
+        if unit == "s":
+            return pd.Timedelta(seconds=value)
+        elif unit == "m":
+            return pd.Timedelta(minutes=value)
+        elif unit == "h":
+            return pd.Timedelta(hours=value)
+        elif unit == "d":
+            return pd.Timedelta(days=value)
+        elif unit == "w":
+            return pd.Timedelta(weeks=value)
+        elif unit == "mo":
+            return pd.DateOffset(months=value)
+        elif unit == "y":
+            return pd.DateOffset(years=value)
+        else:
+            raise ValueError(f"不正なインターバル単位: {unit}")
 
     def estimate_data_size(self, start_time, end_time, interval):
         interval_timedelta = self._parse_interval(interval)
@@ -444,8 +474,11 @@ class WidgetManager:
             "end_time": self._create_single_widget(
                 widgets.NaiveDatetimePicker, description="End Time:"
             ),
-            "interval": self._create_single_widget(
-                widgets.Dropdown, options=Constants.INTERVAL_OPTIONS, description="Interval:"
+            "interval_value": self._create_single_widget(
+                widgets.IntText, description="Interval Value:", value=1
+            ),
+            "interval_unit": self._create_single_widget(
+                widgets.Dropdown, options=Constants.INTERVAL_UNITS, description="Interval Unit:"
             ),
             "uploader": self._create_single_widget(
                 widgets.FileUpload, description="Upload File:", layout=Constants.BUTTON_LAYOUT
@@ -479,7 +512,17 @@ class WidgetManager:
         self.widgets["machine"].value = setting_data["machine"]
         self.widgets["start_time"].value = setting_data["start_time"]
         self.widgets["end_time"].value = setting_data["end_time"]
-        self.widgets["interval"].value = setting_data["interval"]
+        interval = setting_data["interval"]
+        interval_value, interval_unit = self._parse_interval(interval)
+        self.widgets["interval_value"].value = interval_value
+        self.widgets["interval_unit"].value = interval_unit
+
+    @staticmethod
+    def _parse_interval(interval: str) -> Tuple[int, str]:
+        for unit in Constants.INTERVAL_UNITS:
+            if interval.endswith(unit):
+                return int(interval[: -len(unit)]), unit
+        raise ValueError(f"Invalid interval format: {interval}")
 
 
 class DataAnalysisWorkbench:
@@ -556,7 +599,14 @@ class DataAnalysisWorkbench:
 
     def _create_event_handlers(self) -> None:
         self.widget_manager.widgets["data_fetch"].on_click(self.on_data_fetch_click)
-        for widget_name in ["machine", "start_time", "end_time", "interval", "uploader"]:
+        for widget_name in [
+            "machine",
+            "start_time",
+            "end_time",
+            "interval_value",
+            "interval_unit",
+            "uploader",
+        ]:
             self.widget_manager.widgets[widget_name].observe(self.on_value_change, names="value")
         self.widget_manager.widgets["uploader"].observe(self.on_file_upload, names="value")
         self.widget_manager.widgets["graph_create"].on_click(self.on_graph_create_click)
@@ -586,8 +636,13 @@ class DataAnalysisWorkbench:
             error_messages.append("開始時刻は終了時刻より前である必要があります")
             is_valid = False
 
-        if not self.widget_manager.widgets["interval"].value:
-            error_messages.append("インターバルを選択してください")
+        interval_value = self.widget_manager.widgets["interval_value"].value
+        interval_unit = self.widget_manager.widgets["interval_unit"].value
+        if interval_value <= 0:
+            error_messages.append("インターバル値は正の整数である必要があります")
+            is_valid = False
+        if not interval_unit:
+            error_messages.append("インターバル単位を選択してください")
             is_valid = False
 
         self._update_error_message(error_messages, is_valid)
@@ -660,7 +715,9 @@ class DataAnalysisWorkbench:
 
         start_time = self.widget_manager.widgets["start_time"].value
         end_time = self.widget_manager.widgets["end_time"].value
-        interval = self.widget_manager.widgets["interval"].value
+        interval_value = self.widget_manager.widgets["interval_value"].value
+        interval_unit = self.widget_manager.widgets["interval_unit"].value
+        interval = f"{interval_value}{interval_unit}"
 
         # データサイズの見積もり
         num_data_points, num_tags, estimated_size_bytes = self.data_fetcher.estimate_data_size(
@@ -726,11 +783,25 @@ class DataAnalysisWorkbench:
         ].value = '<span style="color: red;">設定ファイルをアップロードしてください</span>'
 
     def _disable_widgets(self):
-        for widget_name in ["machine", "start_time", "end_time", "interval", "data_fetch"]:
+        for widget_name in [
+            "machine",
+            "start_time",
+            "end_time",
+            "interval_value",
+            "interval_unit",
+            "data_fetch",
+        ]:
             self.widget_manager.widgets[widget_name].disabled = True
 
     def _enable_widgets(self):
-        for widget_name in ["machine", "start_time", "end_time", "interval", "data_fetch"]:
+        for widget_name in [
+            "machine",
+            "start_time",
+            "end_time",
+            "interval_value",
+            "interval_unit",
+            "data_fetch",
+        ]:
             self.widget_manager.widgets[widget_name].disabled = False
 
     def _set_initial_state(self):
