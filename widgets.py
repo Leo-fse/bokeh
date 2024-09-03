@@ -864,13 +864,18 @@ class DataAnalysisWorkbench:
 
         try:
             graph_layout = self.graph_creator.create_graph(self.fetched_data)
-            output_dir = f"output/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            setting_data = self.settings_manager.get_setting_data()
+            page_title = setting_data.get("page_title", "データグラフ")
+            output_dir = f"output/{page_title}"
             os.makedirs(output_dir, exist_ok=True)
-            output_file(f"{output_dir}/graphs.html", mode="inline")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file(f"{output_dir}/graphs_{timestamp}.html", mode="inline")
 
             self.widget_manager.widgets[
                 "graph_status"
-            ].value = f"グラフ作成完了。{output_dir}にグラフが保存されています。"
+            ].value = (
+                f"グラフ作成完了。{output_dir}/graphs_{timestamp}.htmlにグラフが保存されています。"
+            )
 
             # グラフをノートブック上に表示
             with self.output:
@@ -935,42 +940,25 @@ class DataAnalysisWorkbench:
             return
 
         try:
-            output_dir = self._select_output_directory()
-            if output_dir is None:
-                self.widget_manager.widgets[
-                    "data_export_status"
-                ].value = "出力先が選択されませんでした"
-                return
+            setting_data = self.settings_manager.get_setting_data()
+            page_title = setting_data.get("page_title", "データグラフ")
+            output_dir = os.path.join("output", page_title)
+            os.makedirs(output_dir, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = os.path.join(output_dir, f"data_export_{timestamp}.csv")
             self.fetched_data.to_csv(output_file, index=False, encoding="utf-8-sig")
 
+            relative_path = os.path.relpath(output_file)
             self.widget_manager.widgets[
                 "data_export_status"
-            ].value = f"データ出力完了。{output_file}にデータが保存されました。"
+            ].value = f"データ出力完了。{relative_path}にデータが保存されました。"
         except Exception as e:
             self._log(f"データ出力中にエラーが発生しました: {str(e)}")
             self.widget_manager.widgets["data_export_status"].value = f"データ出力エラー: {str(e)}"
             self._error_log(traceback.format_exc())
 
         self._log(f"ステータス: {self.widget_manager.widgets['data_export_status'].value}")
-
-    def _select_output_directory(self):
-        root = tk.Tk()
-        root.withdraw()  # メインウィンドウを非表示にする
-
-        # カレントディレクトリ内のoutputフォルダをデフォルトとして設定
-        default_dir = os.path.join(os.getcwd(), "output")
-
-        # outputフォルダが存在しない場合は作成
-        if not os.path.exists(default_dir):
-            os.makedirs(default_dir)
-
-        directory = filedialog.askdirectory(
-            title="データ出力先を選択してください", initialdir=default_dir
-        )
-        return directory if directory else None
 
 
 def show_widgets():
