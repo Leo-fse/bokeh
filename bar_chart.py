@@ -25,8 +25,9 @@ class ChartConfig:
     title: str = "Chart Title"
     plot_width: int = 500  # サイズを調整
     plot_height: int = 500  # サイズを調整
-    toolbar_location: Optional[str] = None
-    show_grid: bool = False
+    toolbar_location: Optional[str] = "above"
+    show_grid: bool = True
+    show_axis: bool = True
     legend_location: Optional[str] = "top_left"
 
 
@@ -36,6 +37,7 @@ class PIChartConfig(ChartConfig):
 
     x_range: Tuple[float, float] = (-1.5, 1.5)
     y_range: Tuple[float, float] = (-1.5, 1.5)
+    show_grid: bool = False
     show_axis: bool = False
     label_position_adjust: float = 0.65  # ラベルの位置を調整するための係数
 
@@ -45,7 +47,6 @@ class BarChartConfig(ChartConfig):
     """棒グラフのプロット設定を保持するデータ構造"""
 
     title: str = "Pizza Orders - Bar Chart"
-    show_grid: bool = True
 
 
 class Chart:
