@@ -33,13 +33,17 @@ colors=["red", "darkorange", "darkgreen", "hotpink"]
 
 ### 円グラフの作成
 ```python
-pie_config = PieChartConfig(title="Pizza Orders - Pie Chart", label_position_adjust=1.3)
+pie_config = PieChartConfig(
+    title="Pizza Orders - Pie Chart", 
+    label_position_adjust=1.3
+)
 pie_chart = PieChart(data, pie_config)
 pie_figure = pie_chart.render()
-棒グラフの作成
-bar_config = BarChartConfig(
-title="Pizza Orders - Bar Chart"
-)
+```
+
+### 棒グラフの作成
+```python
+bar_config = BarChartConfig(title="Pizza Orders - Bar Chart")
 bar_chart = BarChart(data, bar_config)
 bar_figure = bar_chart.render()
 ```
