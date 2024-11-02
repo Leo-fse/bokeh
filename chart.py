@@ -3,7 +3,6 @@ from math import pi
 from typing import List, Optional, Tuple
 
 import numpy as np
-
 from bokeh.layouts import row
 from bokeh.models import ColumnDataSource
 from bokeh.plotting import figure, show
