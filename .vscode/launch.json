@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Py: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src",
+            "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+            "justMyCode": false
+        }
+    ]
+}

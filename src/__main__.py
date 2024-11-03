@@ -1,14 +1,15 @@
-from bokeh.io import output_notebook
+from bokeh.io import show
 from bokeh.layouts import row
-from bokeh.plotting import show
 
-from libs.chart import (
+# from bokeh.plotting import show
+from src.libs.chart import (
     BarChart,
     BarChartConfig,
     ChartData,
     PieChart,
     PieChartConfig,
 )
+
 
 def set_chart_data() -> ChartData:
     return ChartData(
@@ -17,16 +18,19 @@ def set_chart_data() -> ChartData:
         colors=["red", "darkorange", "darkgreen", "hotpink"],
     )
 
+
 def config_pie_chart():
     return PieChartConfig(
         title="Pizza Orders - Pie Chart",
         label_position_adjust=1.3,
     )
 
+
 def config_bar_chart():
     return BarChartConfig(
         title="Pizza Orders - Bar Chart",
     )
+
 
 def create_charts(data):
     pie_config = config_pie_chart()
@@ -37,10 +41,12 @@ def create_charts(data):
 
     return pie_chart.render(), bar_chart.render()
 
+
 def main():
     data = set_chart_data()
     pie_figure, bar_figure = create_charts(data)
     show(row(pie_figure, bar_figure))
+
 
 if __name__ == "__main__":
     main()
