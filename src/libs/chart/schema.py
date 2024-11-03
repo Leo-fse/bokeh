@@ -29,9 +29,6 @@ class ChartData(BaseModel):
         if len(self.y) != x_len or len(self.colors) != x_len:
             raise ValueError("全てのリストは同じ長さである必要があります")
 
-        if any(val < 0 for val in self.y):
-            raise ValueError("数量は0以上である必要があります")
-
         return self
 
     class Config:

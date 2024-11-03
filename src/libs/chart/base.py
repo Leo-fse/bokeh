@@ -26,9 +26,9 @@ class Chart(ABC):
         x_range = (
             self.source.data["labels"]
             if isinstance(self.config, BarChartConfig)
-            else self.config.x_range
+            else getattr(self.config, "x_range", None)
         )
-        y_range = self.config.y_range if hasattr(self.config, "y_range") else None
+        y_range = getattr(self.config, "y_range", None)
         return figure(
             title=self.config.title,
             plot_height=self.config.plot_height,
