@@ -1,52 +1,20 @@
-from bokeh.io import show
-from bokeh.layouts import row
-
-# from bokeh.plotting import show
-from src.libs.chart import (
-    BarChart,
-    BarChartConfig,
-    ChartData,
-    PieChart,
-    PieChartConfig,
-)
+import pandas as pd
 
 
-def set_chart_data() -> ChartData:
-    return ChartData(
-        x=["Pepperoni", "Cheese", "Mixed Veggies", "Bacon"],
-        y=[221, 212, 152, 72],
-        colors=["red", "darkorange", "darkgreen", "hotpink"],
-    )
-
-
-def config_pie_chart():
-    return PieChartConfig(
-        title="Pizza Orders - Pie Chart",
-        label_position_adjust=1.3,
-    )
-
-
-def config_bar_chart():
-    return BarChartConfig(
-        title="Pizza Orders - Bar Chart",
-    )
-
-
-def create_charts(data):
-    pie_config = config_pie_chart()
-    bar_config = config_bar_chart()
-
-    pie_chart = PieChart(data, pie_config)
-    bar_chart = BarChart(data, bar_config)
-
-    return pie_chart.render(), bar_chart.render()
-
-
-def main():
-    data = set_chart_data()
-    pie_figure, bar_figure = create_charts(data)
-    show(row(pie_figure, bar_figure))
+def fetch_setteings(fp: str):
+    sheet_names = ["data", "layout", "graph", "calc"]
+    setting_df_dict = pd.read_excel(fp, sheet_name=sheet_names, header=1)
+    data_df = setting_df_dict["data"]
+    layout_df = setting_df_dict["layout"]
+    graph_df = setting_df_dict["graph"]
+    calc_df = setting_df_dict["calc"]
+    return data_df, layout_df, graph_df, calc_df
 
 
 if __name__ == "__main__":
-    main()
+    setting_file_path = r"C:\Users\tomon\Documents\Python\settings.xlsx"
+    data_df, layout_df, graph_df, calc_df = fetch_setteings(fp=setting_file_path)
+    print(data_df)
+    print(layout_df)
+    print(graph_df)
+    print(calc_df)
