@@ -91,6 +91,11 @@ Public Sub UpdateCellColor(Target As Range)
     Dim r As Long, g As Long, b As Long  ' RGB値を格納する変数
     Dim brightness As Double             ' 明るさ（輝度）の計算結果を格納
 
+    ' 色名とRGBのマッピング
+    Dim colorMap As Object
+    Set colorMap = CreateObject("Scripting.Dictionary")
+    Call InitializeColorMap(colorMap)
+
     ' シート名を取得
     wsName = Target.Worksheet.Name
 
@@ -106,45 +111,73 @@ Public Sub UpdateCellColor(Target As Range)
     Application.EnableEvents = False
     For Each cell In targetRange
         If Not IsEmpty(cell.Value) Then
-            colorCode = cell.Value
-            If Left(colorCode, 1) = "#" Then
+            colorCode = Trim(cell.Value)
+            
+            ' 色名からRGBに変換
+            If colorMap.exists(LCase(colorCode)) Then
+                r = colorMap(LCase(colorCode))(0)
+                g = colorMap(LCase(colorCode))(1)
+                b = colorMap(LCase(colorCode))(2)
+            ElseIf Left(colorCode, 1) = "#" Then
                 colorCode = Mid(colorCode, 2) ' 先頭の # を取り除く
-            End If
-
-            ' カラーコードをRGBに分解
-            If Len(colorCode) = 6 Then
-                On Error Resume Next
-                r = CLng("&H" & Mid(colorCode, 1, 2)) ' 赤 (先頭2桁)
-                g = CLng("&H" & Mid(colorCode, 3, 2)) ' 緑 (次の2桁)
-                b = CLng("&H" & Mid(colorCode, 5, 2)) ' 青 (最後の2桁)
-                On Error GoTo 0
-
-                ' RGB値から背景色を設定
-                cell.Interior.Color = RGB(r, g, b)
-
-                ' 明るさ（輝度）を計算
-                ' 輝度 = (0.299 * R + 0.587 * G + 0.114 * B)
-                brightness = (0.299 * r + 0.587 * g + 0.114 * b)
-
-                ' 輝度に応じてテキスト色を変更
-                If brightness < 128 Then
-                    ' 背景が暗い場合は白いテキスト
-                    cell.Font.Color = RGB(255, 255, 255)
+                If Len(colorCode) = 6 Then
+                    On Error Resume Next
+                    r = CLng("&H" & Mid(colorCode, 1, 2)) ' 赤
+                    g = CLng("&H" & Mid(colorCode, 3, 2)) ' 緑
+                    b = CLng("&H" & Mid(colorCode, 5, 2)) ' 青
+                    On Error GoTo 0
                 Else
-                    ' 背景が明るい場合は黒いテキスト
-                    cell.Font.Color = RGB(0, 0, 0)
+                    GoTo ResetCell
                 End If
             Else
-                ' 不正なカラーコードの場合は背景とフォントをリセット
-                cell.Interior.ColorIndex = xlNone
-                cell.Font.Color = RGB(0, 0, 0)
+                GoTo ResetCell
+            End If
+
+            ' RGB値から背景色を設定
+            cell.Interior.Color = RGB(r, g, b)
+
+            ' 明るさ（輝度）を計算
+            brightness = (0.299 * r + 0.587 * g + 0.114 * b)
+
+            ' 輝度に応じてテキスト色を変更
+            If brightness < 128 Then
+                cell.Font.Color = RGB(255, 255, 255) ' 白い文字
+            Else
+                cell.Font.Color = RGB(0, 0, 0) ' 黒い文字
             End If
         Else
-            ' セルが空の場合は背景とフォントをリセット
+ResetCell:
+            ' セルが空、または無効な値の場合は背景とフォントをリセット
             cell.Interior.ColorIndex = xlNone
             cell.Font.Color = RGB(0, 0, 0)
         End If
     Next cell
     Application.EnableEvents = True
 End Sub
+
+' 色名と対応するRGB値を設定
+Private Sub InitializeColorMap(colorMap As Object)
+    colorMap.Add "red", Array(255, 0, 0)
+    colorMap.Add "green", Array(0, 128, 0)
+    colorMap.Add "blue", Array(0, 0, 255)
+    colorMap.Add "yellow", Array(255, 255, 0)
+    colorMap.Add "pink", Array(255, 192, 203)
+    colorMap.Add "orange", Array(255, 165, 0)
+    colorMap.Add "purple", Array(128, 0, 128)
+    colorMap.Add "cyan", Array(0, 255, 255)
+    colorMap.Add "magenta", Array(255, 0, 255)
+    colorMap.Add "lime", Array(0, 255, 0)
+    colorMap.Add "black", Array(0, 0, 0)
+    colorMap.Add "white", Array(255, 255, 255)
+    colorMap.Add "gray", Array(128, 128, 128)
+    colorMap.Add "grey", Array(128, 128, 128) ' 米国・英国英語両方対応
+    colorMap.Add "brown", Array(165, 42, 42)
+    colorMap.Add "gold", Array(255, 215, 0)
+    colorMap.Add "silver", Array(192, 192, 192)
+    colorMap.Add "navy", Array(0, 0, 128)
+    colorMap.Add "teal", Array(0, 128, 128)
+    colorMap.Add "olive", Array(128, 128, 0)
+    ' 必要に応じて他の色も追加可能
+End Sub
+
 ```
