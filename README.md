@@ -82,6 +82,7 @@ bar_figure = bar_chart.render()
 - Jupyter Notebook
 - Ruff (コードフォーマッター)
 
+'''
 Public Sub UpdateCellColor(Target As Range)
     Dim wsName As String
     Dim targetRange As Range
@@ -130,3 +131,4 @@ Public Sub UpdateCellColor(Target As Range)
     Next cell
     Application.EnableEvents = True
 End Sub
+'''
