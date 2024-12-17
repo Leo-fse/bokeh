@@ -89,6 +89,7 @@ Public Sub UpdateCellColor(Target As Range)
     Dim colorCode As String
     Dim cell As Range
     Dim r As Long, g As Long, b As Long  ' RGB値を格納する変数
+    Dim brightness As Double             ' 明るさ（輝度）の計算結果を格納
 
     ' シート名を取得
     wsName = Target.Worksheet.Name
@@ -118,15 +119,30 @@ Public Sub UpdateCellColor(Target As Range)
                 b = CLng("&H" & Mid(colorCode, 5, 2)) ' 青 (最後の2桁)
                 On Error GoTo 0
 
-                ' RGB値から色を設定（順序を考慮）
+                ' RGB値から背景色を設定
                 cell.Interior.Color = RGB(r, g, b)
+
+                ' 明るさ（輝度）を計算
+                ' 輝度 = (0.299 * R + 0.587 * G + 0.114 * B)
+                brightness = (0.299 * r + 0.587 * g + 0.114 * b)
+
+                ' 輝度に応じてテキスト色を変更
+                If brightness < 128 Then
+                    ' 背景が暗い場合は白いテキスト
+                    cell.Font.Color = RGB(255, 255, 255)
+                Else
+                    ' 背景が明るい場合は黒いテキスト
+                    cell.Font.Color = RGB(0, 0, 0)
+                End If
             Else
-                ' 不正なカラーコードの場合は色をリセット
+                ' 不正なカラーコードの場合は背景とフォントをリセット
                 cell.Interior.ColorIndex = xlNone
+                cell.Font.Color = RGB(0, 0, 0)
             End If
         Else
-            ' セルが空の場合は背景色をリセット
+            ' セルが空の場合は背景とフォントをリセット
             cell.Interior.ColorIndex = xlNone
+            cell.Font.Color = RGB(0, 0, 0)
         End If
     Next cell
     Application.EnableEvents = True
