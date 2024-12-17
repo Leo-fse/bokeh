@@ -81,3 +81,52 @@ bar_figure = bar_chart.render()
 - Visual Studio Code
 - Jupyter Notebook
 - Ruff (コードフォーマッター)
+
+Public Sub UpdateCellColor(Target As Range)
+    Dim wsName As String
+    Dim targetRange As Range
+    Dim colorCode As String
+    Dim cell As Range
+    Dim r As Long, g As Long, b As Long  ' RGB値を格納する変数
+
+    ' シート名を取得
+    wsName = Target.Worksheet.Name
+
+    ' 適用範囲が設定されているか確認
+    If SheetRanges Is Nothing Then Exit Sub
+    If Not SheetRanges.Exists(wsName) Then Exit Sub
+
+    ' 適用範囲を取得
+    Set targetRange = Intersect(Target, Target.Worksheet.Range(SheetRanges(wsName)))
+    If targetRange Is Nothing Then Exit Sub
+
+    ' セルごとに背景色を設定
+    Application.EnableEvents = False
+    For Each cell In targetRange
+        If Not IsEmpty(cell.Value) Then
+            colorCode = cell.Value
+            If Left(colorCode, 1) = "#" Then
+                colorCode = Mid(colorCode, 2) ' 先頭の # を取り除く
+            End If
+
+            ' カラーコードをRGBに分解
+            If Len(colorCode) = 6 Then
+                On Error Resume Next
+                r = CLng("&H" & Mid(colorCode, 1, 2)) ' 赤 (先頭2桁)
+                g = CLng("&H" & Mid(colorCode, 3, 2)) ' 緑 (次の2桁)
+                b = CLng("&H" & Mid(colorCode, 5, 2)) ' 青 (最後の2桁)
+                On Error GoTo 0
+
+                ' RGB値から色を設定（順序を考慮）
+                cell.Interior.Color = RGB(r, g, b)
+            Else
+                ' 不正なカラーコードの場合は色をリセット
+                cell.Interior.ColorIndex = xlNone
+            End If
+        Else
+            ' セルが空の場合は背景色をリセット
+            cell.Interior.ColorIndex = xlNone
+        End If
+    Next cell
+    Application.EnableEvents = True
+End Sub
