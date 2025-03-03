@@ -178,6 +178,42 @@ Private Sub InitializeColorMap(colorMap As Object)
     colorMap.Add "teal", Array(0, 128, 128)
     colorMap.Add "olive", Array(128, 128, 0)
     ' 必要に応じて他の色も追加可能
-End Sub
+End 
 
-```
+
+
+import { useState } from "react";
+import { open } from "@tauri-apps/api/dialog";
+
+export default function FileSelector() {
+  const [filePath, setFilePath] = useState("");
+
+  const handleFileSelect = async () => {
+    try {
+      // Tauri のダイアログを開いてファイルを選択
+      const selectedPath = await open({
+        multiple: false, // 複数選択を許可する場合は true
+      });
+
+      if (selectedPath) {
+        setFilePath(selectedPath);
+      }
+    } catch (error) {
+      console.error("ファイルの選択に失敗しました:", error);
+    }
+  };
+
+  return (
+    <div>
+      <h1>Tauriでファイル選択</h1>
+      <button onClick={handleFileSelect}>ファイルを選択</button>
+      {filePath && <p>選択されたファイル: {filePath}</p>}
+    </div>
+  );
+}
+
+
+'''
+
+
+'''
