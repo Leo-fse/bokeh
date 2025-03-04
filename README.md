@@ -1,6 +1,13 @@
-$sourcePath = "C:\LocalFolder"
-$destinationPath = "\\ServerName\Share\"
-$logFile = "C:\LocalFolder\move-log.txt"
+$sourcePath = "C:\LocalFolder"  # 移動元フォルダ
+$destinationPath = "\\ServerName\Share\"  # 共有フォルダのパス
+$logFile = "C:\LocalFolder\move-log.txt"  # ログファイル
+$7zipPath = "C:\Program Files\7-Zip\7z.exe"  # 7-Zip のパス
+
+# 7-Zip がインストールされているか確認
+if (!(Test-Path $7zipPath)) {
+    Write-Host "Error: 7-Zip not found at $7zipPath" -ForegroundColor Red
+    exit 1
+}
 
 while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
     $folder = Get-ChildItem -Path $sourcePath -Directory | Select-Object -First 1
@@ -19,11 +26,12 @@ while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
         # 圧縮前に 0KB のファイルを削除
         Get-ChildItem -Path $sourceFolderPath -File | Where-Object { $_.Length -eq 0 } | Remove-Item -Force
 
-        # 圧縮処理
+        # 圧縮処理（7-Zip を使用）
         try {
-            Write-Host "Compressing: $sourceFolderPath -> $zipFilePath"
-            Compress-Archive -Path $sourceFolderPath -DestinationPath $zipFilePath -Force
-            Remove-Item -Path $sourceFolderPath -Recurse -Force
+            Write-Host "Compressing with 7-Zip: $sourceFolderPath -> $zipFilePath"
+            $arguments = "a -tzip `"$zipFilePath`" `"$sourceFolderPath\*`" -mx9"
+            Start-Process -FilePath $7zipPath -ArgumentList $arguments -NoNewWindow -Wait
+            Remove-Item -Path $sourceFolderPath -Recurse -Force  # 圧縮後に元フォルダを削除
             Add-Content -Path $logFile -Value "Compressed: $sourceFolderPath -> $zipFilePath"
         }
         catch {
