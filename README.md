@@ -2,6 +2,7 @@ $sourcePath = "C:\LocalFolder"  # 移動元フォルダ
 $destinationPath = "\\ServerName\Share\"  # 共有フォルダのパス
 $logFile = "C:\LocalFolder\move-log.txt"  # ログファイル
 $7zipPath = "C:\Program Files\7-Zip\7z.exe"  # 7-Zip のパス
+$foldersToDelete = @("node_modules", ".venv", ".next")  # 削除対象のフォルダリスト
 
 # 7-Zip がインストールされているか確認
 if (!(Test-Path $7zipPath)) {
@@ -14,6 +15,22 @@ while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
     if ($folder) {
         $sourceFolderPath = $folder.FullName
         $zipFilePath = "$sourceFolderPath.zip"
+
+        # 特定フォルダを削除
+        foreach ($delFolder in $foldersToDelete) {
+            $delPath = Join-Path -Path $sourceFolderPath -ChildPath $delFolder
+            if (Test-Path $delPath) {
+                try {
+                    Write-Host "Deleting: $delPath"
+                    Remove-Item -Path $delPath -Recurse -Force
+                    Add-Content -Path $logFile -Value "Deleted: $delPath"
+                }
+                catch {
+                    Write-Host "Failed to delete: $delPath" -ForegroundColor Red
+                    Add-Content -Path $logFile -Value "Failed to delete: $delPath - Error: $_"
+                }
+            }
+        }
 
         # 空のフォルダなら削除
         if ((Get-ChildItem -Path $sourceFolderPath -Recurse -Force).Count -eq 0) {
