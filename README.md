@@ -27,3 +27,27 @@ export default function FileSelector() {
     </div>
   );
 }
+
+
+
+$sourcePath = "C:\LocalFolder"  # 移動元フォルダ
+$destinationPath = "\\ServerName\Share\"  # 移動先（共有フォルダ）
+
+while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
+    # 最初のフォルダを取得
+    $folder = Get-ChildItem -Path $sourcePath -Directory | Select-Object -First 1
+    if ($folder) {
+        $sourceFolderPath = $folder.FullName
+        $destFolderPath = Join-Path -Path $destinationPath -ChildPath $folder.Name
+        
+        try {
+            # フォルダを移動
+            Move-Item -Path $sourceFolderPath -Destination $destFolderPath -Force
+            Write-Host "Moved: $sourceFolderPath -> $destFolderPath"
+        }
+        catch {
+            Write-Host "Failed to move: $sourceFolderPath" -ForegroundColor Red
+        }
+    }
+}
+Write-Host "All folders moved successfully!"
