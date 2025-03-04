@@ -16,18 +16,20 @@ while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
         $sourceFolderPath = $folder.FullName
         $zipFilePath = "$sourceFolderPath.zip"
 
-        # 特定フォルダを削除
+        # サブディレクトリを含めて削除対象フォルダを検索して削除
         foreach ($delFolder in $foldersToDelete) {
-            $delPath = Join-Path -Path $sourceFolderPath -ChildPath $delFolder
-            if (Test-Path $delPath) {
-                try {
-                    Write-Host "Deleting: $delPath"
-                    Remove-Item -Path $delPath -Recurse -Force
-                    Add-Content -Path $logFile -Value "Deleted: $delPath"
-                }
-                catch {
-                    Write-Host "Failed to delete: $delPath" -ForegroundColor Red
-                    Add-Content -Path $logFile -Value "Failed to delete: $delPath - Error: $_"
+            $delPaths = Get-ChildItem -Path $sourceFolderPath -Recurse -Directory -Force | Where-Object { $_.Name -eq $delFolder }
+            foreach ($delPath in $delPaths) {
+                if (Test-Path $delPath.FullName) {
+                    try {
+                        Write-Host "Deleting: $delPath"
+                        Remove-Item -Path $delPath.FullName -Recurse -Force
+                        Add-Content -Path $logFile -Value "Deleted: $delPath"
+                    }
+                    catch {
+                        Write-Host "Failed to delete: $delPath" -ForegroundColor Red
+                        Add-Content -Path $logFile -Value "Failed to delete: $delPath - Error: $_"
+                    }
                 }
             }
         }
@@ -41,7 +43,7 @@ while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
         }
 
         # 圧縮前に 0KB のファイルを削除
-        Get-ChildItem -Path $sourceFolderPath -File | Where-Object { $_.Length -eq 0 } | Remove-Item -Force
+        Get-ChildItem -Path $sourceFolderPath -File -Recurse | Where-Object { $_.Length -eq 0 } | Remove-Item -Force
 
         # 圧縮処理（7-Zip を使用）
         try {
