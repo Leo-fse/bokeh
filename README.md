@@ -16,18 +16,25 @@ while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
         $sourceFolderPath = $folder.FullName
         $zipFilePath = "$sourceFolderPath.zip"
 
-        # サブディレクトリを含めて削除対象フォルダを検索して削除
+        # 圧縮前に削除対象フォルダを確実に削除
         foreach ($delFolder in $foldersToDelete) {
             $delPaths = Get-ChildItem -Path $sourceFolderPath -Recurse -Directory -Force | Where-Object { $_.Name -eq $delFolder }
             foreach ($delPath in $delPaths) {
                 if (Test-Path $delPath.FullName) {
                     try {
                         Write-Host "Deleting: $delPath"
-                        Remove-Item -Path $delPath.FullName -Recurse -Force
-                        Add-Content -Path $logFile -Value "Deleted: $delPath"
+                        Remove-Item -Path $delPath.FullName -Recurse -Force -ErrorAction Stop
+                        Start-Sleep -Seconds 2  # 削除が反映されるのを待つ
+                        if (!(Test-Path $delPath.FullName)) {
+                            Write-Host "Deleted successfully: $delPath"
+                            Add-Content -Path $logFile -Value "Deleted: $delPath"
+                        } else {
+                            Write-Host "Warning: $delPath still exists!" -ForegroundColor Yellow
+                            Add-Content -Path $logFile -Value "Warning: Failed to delete: $delPath"
+                        }
                     }
                     catch {
-                        Write-Host "Failed to delete: $delPath" -ForegroundColor Red
+                        Write-Host "Failed to delete: $delPath - Error: $_" -ForegroundColor Red
                         Add-Content -Path $logFile -Value "Failed to delete: $delPath - Error: $_"
                     }
                 }
