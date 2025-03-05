@@ -1,83 +1,62 @@
-$sourcePath = "C:\LocalFolder"  # 移動元フォルダ
-$destinationPath = "\\ServerName\Share\"  # 共有フォルダのパス
-$logFile = "C:\LocalFolder\move-log.txt"  # ログファイル
-$7zipPath = "C:\Program Files\7-Zip\7z.exe"  # 7-Zip のパス
-$foldersToDelete = @("node_modules", ".venv", ".next")  # 削除対象のフォルダリスト
+use duckdb::{Connection, Result};
+use tauri::command;
 
-# 7-Zip がインストールされているか確認
-if (!(Test-Path $7zipPath)) {
-    Write-Host "Error: 7-Zip not found at $7zipPath" -ForegroundColor Red
-    exit 1
-}
+#[command]
+fn get_time_series_data() -> Result<Vec<String>, String> {
+    // DuckDB のデータベースファイルを開く（なければ自動作成）
+    let conn = Connection::open("database.duckdb").map_err(|e| e.to_string())?;
+    
+    // サンプルのテーブル作成（最初だけ実行）
+    conn.execute("CREATE TABLE IF NOT EXISTS timeseries (timestamp TIMESTAMP, value DOUBLE)", [])
+        .map_err(|e| e.to_string())?;
 
-while ((Get-ChildItem -Path $sourcePath -Directory).Count -gt 0) {
-    $folder = Get-ChildItem -Path $sourcePath -Directory | Select-Object -First 1
-    if ($folder) {
-        $sourceFolderPath = $folder.FullName
-        $zipFilePath = "$sourceFolderPath.zip"
+    // 仮のデータを挿入（本番環境ではデータをバルクインサートする）
+    conn.execute("INSERT INTO timeseries VALUES (NOW(), 123.45)", [])
+        .map_err(|e| e.to_string())?;
 
-        # 圧縮前に削除対象フォルダを確実に削除
-        foreach ($delFolder in $foldersToDelete) {
-            $delPaths = Get-ChildItem -Path $sourceFolderPath -Recurse -Directory -Force | Where-Object { $_.Name -eq $delFolder }
-            foreach ($delPath in $delPaths) {
-                if (Test-Path $delPath.FullName) {
-                    try {
-                        Write-Host "Deleting: $delPath"
-                        Remove-Item -Path $delPath.FullName -Recurse -Force -ErrorAction Stop
-                        Start-Sleep -Seconds 2  # 削除が反映されるのを待つ
-                        if (!(Test-Path $delPath.FullName)) {
-                            Write-Host "Deleted successfully: $delPath"
-                            Add-Content -Path $logFile -Value "Deleted: $delPath"
-                        } else {
-                            Write-Host "Warning: $delPath still exists!" -ForegroundColor Yellow
-                            Add-Content -Path $logFile -Value "Warning: Failed to delete: $delPath"
-                        }
-                    }
-                    catch {
-                        Write-Host "Failed to delete: $delPath - Error: $_" -ForegroundColor Red
-                        Add-Content -Path $logFile -Value "Failed to delete: $delPath - Error: $_"
-                    }
-                }
-            }
-        }
+    // データを取得
+    let mut stmt = conn.prepare("SELECT timestamp, value FROM timeseries ORDER BY timestamp DESC")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
 
-        # 空のフォルダなら削除
-        if ((Get-ChildItem -Path $sourceFolderPath -Recurse -Force).Count -eq 0) {
-            Write-Host "Skipping empty folder: $sourceFolderPath"
-            Remove-Item -Path $sourceFolderPath -Recurse -Force
-            Add-Content -Path $logFile -Value "Skipped empty folder: $sourceFolderPath"
-            continue
-        }
-
-        # 圧縮前に 0KB のファイルを削除
-        Get-ChildItem -Path $sourceFolderPath -File -Recurse | Where-Object { $_.Length -eq 0 } | Remove-Item -Force
-
-        # 圧縮処理（7-Zip を使用）
-        try {
-            Write-Host "Compressing with 7-Zip: $sourceFolderPath -> $zipFilePath"
-            $arguments = "a -tzip `"$zipFilePath`" `"$sourceFolderPath\*`" -mx9"
-            Start-Process -FilePath $7zipPath -ArgumentList $arguments -NoNewWindow -Wait
-            Remove-Item -Path $sourceFolderPath -Recurse -Force  # 圧縮後に元フォルダを削除
-            Add-Content -Path $logFile -Value "Compressed: $sourceFolderPath -> $zipFilePath"
-        }
-        catch {
-            Write-Host "Failed to compress: $sourceFolderPath" -ForegroundColor Red
-            Add-Content -Path $logFile -Value "Failed to compress: $sourceFolderPath - Error: $_"
-            continue
-        }
-
-        # ZIPを移動
-        $destZipPath = Join-Path -Path $destinationPath -ChildPath (Split-Path -Leaf $zipFilePath)
-        try {
-            Move-Item -Path $zipFilePath -Destination $destZipPath -Force
-            Write-Host "Moved: $zipFilePath -> $destZipPath"
-            Add-Content -Path $logFile -Value "Moved: $zipFilePath -> $destZipPath"
-        }
-        catch {
-            Write-Host "Failed to move: $zipFilePath" -ForegroundColor Red
-            Add-Content -Path $logFile -Value "Failed to move: $zipFilePath - Error: $_"
-        }
+    // 結果を文字列のリストに変換
+    let mut result = Vec::new();
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        let timestamp: String = row.get(0).map_err(|e| e.to_string())?;
+        let value: f64 = row.get(1).map_err(|e| e.to_string())?;
+        result.push(format!("{}: {}", timestamp, value));
     }
+    
+    Ok(result)
 }
 
-Write-Host "All folders processed successfully!"
+
+import { invoke } from "@tauri-apps/api/tauri";
+import { useState, useEffect } from "react";
+
+export default function TimeSeries() {
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const result = await invoke("get_time_series_data");
+        setData(result);
+      } catch (error) {
+        console.error("Failed to fetch data:", error);
+      }
+    }
+    fetchData();
+  }, []);
+
+  return (
+    <div>
+      <h1>Time Series Data</h1>
+      <ul>
+        {data.map((item, index) => (
+          <li key={index}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
