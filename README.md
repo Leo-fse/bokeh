@@ -1,62 +1,25 @@
-use duckdb::{Connection, Result};
-use tauri::command;
+use std::process::Command;
+use tauri::AppBuilder;
 
-#[command]
-fn get_time_series_data() -> Result<Vec<String>, String> {
-    // DuckDB のデータベースファイルを開く（なければ自動作成）
-    let conn = Connection::open("database.duckdb").map_err(|e| e.to_string())?;
-    
-    // サンプルのテーブル作成（最初だけ実行）
-    conn.execute("CREATE TABLE IF NOT EXISTS timeseries (timestamp TIMESTAMP, value DOUBLE)", [])
-        .map_err(|e| e.to_string())?;
+#[tauri::command]
+fn run_python_script(script: String) -> String {
+    let python_path = "src-tauri/python_embedded/python.exe";
 
-    // 仮のデータを挿入（本番環境ではデータをバルクインサートする）
-    conn.execute("INSERT INTO timeseries VALUES (NOW(), 123.45)", [])
-        .map_err(|e| e.to_string())?;
+    let output = Command::new(python_path)
+        .arg(script)
+        .output()
+        .expect("Failed to execute Python script");
 
-    // データを取得
-    let mut stmt = conn.prepare("SELECT timestamp, value FROM timeseries ORDER BY timestamp DESC")
-        .map_err(|e| e.to_string())?;
-    let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
 
-    // 結果を文字列のリストに変換
-    let mut result = Vec::new();
-    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-        let timestamp: String = row.get(0).map_err(|e| e.to_string())?;
-        let value: f64 = row.get(1).map_err(|e| e.to_string())?;
-        result.push(format!("{}: {}", timestamp, value));
-    }
-    
-    Ok(result)
+pub fn run() {
+    AppBuilder::new()
+        .invoke_handler(tauri::generate_handler![run_python_script])
+        .run(tauri::generate_context!())
+        .expect("Tauri application failed to start");
 }
 
 
-import { invoke } from "@tauri-apps/api/tauri";
-import { useState, useEffect } from "react";
 
-export default function TimeSeries() {
-  const [data, setData] = useState([]);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const result = await invoke("get_time_series_data");
-        setData(result);
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      }
-    }
-    fetchData();
-  }, []);
-
-  return (
-    <div>
-      <h1>Time Series Data</h1>
-      <ul>
-        {data.map((item, index) => (
-          <li key={index}>{item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
